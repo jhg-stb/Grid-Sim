@@ -791,6 +791,9 @@ def offtake_power(Scenario_path):
                             elev_change = alt-previous_alt
                             dist_lateral = geopy.distance.geodesic(previous_location,current_location).m
                             dist_traveled = np.sqrt(dist_lateral**2 + elev_change**2)
+                            
+                            if (dist_traveled <= 5) and (dist_traveled > 0):
+                                dist_traveled = 0
 
                             if dist_traveled != 0:
                                 energy_discharge = (dist_traveled/1000)*(temp_efficiency) #kWh
@@ -1487,7 +1490,7 @@ def plot_average_energy_vs_time(charging_output_dir):
 
 def run(Scenario_path):
 
-    #offtake_power(Scenario_path)
+    offtake_power(Scenario_path)
     folder_path = Scenario_path + '\\' + 'Output' + '\\' + '24h_Extrapolated_Data'
     #if delete_folders == True:
     #    shutil.rmtree(folder_path)
@@ -1503,7 +1506,7 @@ def run(Scenario_path):
 
     path = Scenario_path+'\\'+'Output'
     os.chdir(path)
-    #os.makedirs('Battery_Level_Added') 
+    os.makedirs('Battery_Level_Added') 
 
     path = Scenario_path+'\\'+'Output'
     os.chdir(path)
@@ -1526,7 +1529,7 @@ def run(Scenario_path):
         create_dataframes_for_date(Scenario_path,dates_list[i])
 
         #With the dataframes created, go through it row by row and do charging
-        #is_it_charging(Scenario_path,dates_list[i])
+        is_it_charging(Scenario_path,dates_list[i])
         grid_impact(Scenario_path,dates_list[i])
 
 
