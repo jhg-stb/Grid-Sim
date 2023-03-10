@@ -16,9 +16,8 @@ import warnings
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 #Radius of charging station inaccurary
-charging_radius = 100
+charging_radius = 50
 Batterty_Flat = False
-
 delete_folders = True
 initialise_done = False
 prep_done = False
@@ -422,7 +421,10 @@ def downsample_input_data(Scenario_path):
                     lat = row['Latitude']
                     lon = row['Longitude']
                     alt = row['Altitude']
-                    speed = row['Speed']
+                    speed = int(row['Speed'])
+
+                    if speed <= 2:
+                        speed = 0
 
                     line = "{},{},{},{},{},{}".format(date,time,lat,lon,alt,speed) + "\n"
                     f_out.write(line)
