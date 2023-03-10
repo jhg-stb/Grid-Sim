@@ -16,7 +16,7 @@ import warnings
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 #Radius of charging station inaccurary
-charging_radius = 50
+charging_radius = 100
 Batterty_Flat = False
 
 delete_folders = True
