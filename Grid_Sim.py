@@ -47,7 +47,7 @@ class TempChargingStationClass:
 TempChargingStations = []
 
 class VehicleClass:
-    def __init__(self, name, battery_capacity, efficiency, vehicle_active,latitude,longitude,altitude,speed,battery_status,where_charging):
+    def __init__(self, name, battery_capacity, efficiency, vehicle_active,latitude,longitude,altitude,speed,battery_status,where_charging,stop_duration):
             self.name = name
             self.battery_capacity = battery_capacity
             self.efficiency = efficiency
@@ -58,6 +58,7 @@ class VehicleClass:
             self.speed = speed
             self.battery_status = battery_status
             self.where_charging = where_charging
+            self.stop_duration = stop_duration
 Vehicles = []
 
 class ChargingStationClass:
@@ -740,7 +741,7 @@ def offtake_power(Scenario_path):
             temp_name = vehicle_folders[i]
 
 
-            vehicle =  VehicleClass(temp_name, temp_battery_cap, temp_efficiency, None, None, None, None, None, temp_battery_cap, 'N/A')
+            vehicle =  VehicleClass(temp_name, temp_battery_cap, temp_efficiency, None, None, None, None, None, temp_battery_cap, 'N/A', 0)
             Vehicles.append(vehicle)
 
         
@@ -908,6 +909,21 @@ def get_battery_status(name):
     for vehicle in Vehicles:
         if vehicle.name == name:
             return vehicle.battery_status
+        
+
+def increase_and_get_stationary_time_at_station(name):
+    global Vehicles
+    for vehicle in Vehicles:
+        if vehicle.name == name:
+            vehicle.stop_duration = int(vehicle.stop_duration) +1
+            return vehicle.stop_duration
+        
+def reset_stationary_time_at_charger(name):
+    global Vehicles
+    for vehicle in Vehicles:
+        if vehicle.name == name:
+            vehicle.stop_duration = 0
+        
 
 def is_charger_available(charging_station_name):
     for obj in ChargingStationsObj:
@@ -995,7 +1011,7 @@ def is_it_charging(Scenario_path,current_date):
 
     output_dir = Scenario_path+'\\'+'Output'+'\\'+'Battery_Level_Added'+'\\'+current_date
 
-    header_row = "Minute of Day,Latitude,Longitude,Altitude,Speed,Displacement [m],Energy Used [kWh],Battery Charged [kWh],Battery Level [kWh],Where I'm Charging"
+    header_row = "Minute of Day,Latitude,Longitude,Altitude,Speed,Displacement [m],Energy Used [kWh],Stationary Charging Oppurtinuty Time at Charging Station [min],Battery Charged [kWh],Battery Level [kWh],Where I'm Charging"
 
     #Directory of power offtake folders
     input_date = Scenario_path + '\\' + 'Output' + '\\' + 'Power_Offtake_Added' + '\\' + current_date
@@ -1032,7 +1048,10 @@ def is_it_charging(Scenario_path,current_date):
             current_speed = float(row[4])
             displacement = float(row[5])
             energy_offtake = float(row[6])
+            stadionary_time_at_charger = 0
             
+            
+
             vehicle = os.path.splitext(os.path.basename(mobility_FILES[i]))[0]
 
             charging_found = False
@@ -1073,8 +1092,20 @@ def is_it_charging(Scenario_path,current_date):
                             #Check to see if the vehicle is still at the same charging station
                             same_charging_point = check_charging_status(vehicle, charging_station_name)
                             
+                            where_charging = get_where_charging(vehicle)
+                            if same_charging_point == False and where_charging != 'N/A':
+                                reset_stationary_time_at_charger(vehicle)
+
+                            
+
+
+
+                            #Add counter for how long this condition is true; only if condition >5, start charging
+                            stadionary_time_at_charger = increase_and_get_stationary_time_at_station(vehicle)
                             
                             if same_charging_point == True:   #Vehicle is already charging at this station
+                                
+                                
                                 #!!!!!!!!!!CHARGING!!!!!!!!!!
 
                                 output_file_temp = os.path.join(output_dir, vehicle + ".csv")
@@ -1087,12 +1118,12 @@ def is_it_charging(Scenario_path,current_date):
                                 where_charging = get_where_charging(vehicle)
 
                                 with open(output_file_temp, 'a') as f_out:
-                                    line = "{},{},{},{},{},{},{},{},{},{}".format(current_minute,current_lat,current_lon,current_alt,current_speed,displacement,energy_offtake,vehicle_charged,new_battery_status,where_charging) + "\n"
+                                    line = "{},{},{},{},{},{},{},{},{},{},{}".format(current_minute,current_lat,current_lon,current_alt,current_speed,displacement,energy_offtake,stadionary_time_at_charger,vehicle_charged,new_battery_status,where_charging) + "\n"
                                     f_out.write(line)
                                     write = True
                             
                             
-                            elif available_charger == True and write == False :   #Vehicle is new to this station, reduce the number of chargers available and set name of station
+                            elif available_charger == True and write == False and stadionary_time_at_charger >= 5:   #Vehicle is new to this station, reduce the number of chargers available and set name of station
                                 #!!!!!!!!!!CHARGING!!!!!!!!!!
 
                                 #Sets the name of where it is currently charging
@@ -1111,9 +1142,26 @@ def is_it_charging(Scenario_path,current_date):
                                 new_battery_status = float(get_battery_status(vehicle))
 
                                 with open(output_file_temp, 'a') as f_out:
-                                    line = "{},{},{},{},{},{},{},{},{},{}".format(current_minute,current_lat,current_lon,current_alt,current_speed,displacement,energy_offtake,vehicle_charged,new_battery_status,where_charging) + "\n"
+                                    line = "{},{},{},{},{},{},{},{},{},{},{}".format(current_minute,current_lat,current_lon,current_alt,current_speed,displacement,energy_offtake,stadionary_time_at_charger,vehicle_charged,new_battery_status,where_charging) + "\n"
                                     f_out.write(line)
                                     write = True
+
+                            elif stadionary_time_at_charger < 5:
+                                #Vehicle is at charging station, but not long enough to start charging
+                                decrease_battery_status(vehicle,energy_offtake)
+                                battery_flat(vehicle, current_lat, current_lon, current_date, current_minute)
+                                output_file_temp = os.path.join(output_dir, vehicle + ".csv")
+                                current_battery_status = get_battery_status(vehicle)
+                                with open(output_file_temp, 'a') as f_out:
+                                    line = "{},{},{},{},{},{},{},{},0,{},".format(current_minute,current_lat,current_lon,current_alt,current_speed,displacement,energy_offtake,stadionary_time_at_charger,current_battery_status) + "\n"
+                                    f_out.write(line)
+                                    write =  True
+
+                                where_charging = get_where_charging(vehicle)
+                                if where_charging != 'N/A':   #Vehicle was charging in the previous datapoint
+                                    set_where_charging(vehicle, 'N/A')
+                                    increase_available_chargers(where_charging)
+                                    reset_stationary_time_at_charger(vehicle)
 
                             break
                         
@@ -1122,13 +1170,14 @@ def is_it_charging(Scenario_path,current_date):
 
                     if charging_found == False and write == False:    
                         #Vehicle is not close to a charging station so it can be concluded vehicle is definietly not charging. Add current battery level to dataframe and print
+                        reset_stationary_time_at_charger(vehicle)
                         decrease_battery_status(vehicle,energy_offtake)
                         battery_flat(vehicle, current_lat, current_lon, current_date, current_minute)
                         output_file_temp = os.path.join(output_dir, vehicle + ".csv")
                         current_battery_status = get_battery_status(vehicle)
 
                         with open(output_file_temp, 'a') as f_out:
-                            line = "{},{},{},{},{},{},{},0,{},".format(current_minute,current_lat,current_lon,current_alt,current_speed,displacement,energy_offtake,current_battery_status) + "\n"
+                            line = "{},{},{},{},{},{},{},{},0,{},".format(current_minute,current_lat,current_lon,current_alt,current_speed,displacement,energy_offtake,stadionary_time_at_charger,current_battery_status) + "\n"
                             f_out.write(line)
                             write =  True
 
@@ -1136,6 +1185,7 @@ def is_it_charging(Scenario_path,current_date):
                         if where_charging != 'N/A':   #Vehicle was charging in the previous datapoint
                             set_where_charging(vehicle, 'N/A')
                             increase_available_chargers(where_charging)
+                            
 
 
                         
@@ -1143,13 +1193,14 @@ def is_it_charging(Scenario_path,current_date):
 
                     elif available_charger == False and write == False:
                         #Vehicle is close to a charging station, but no charger is available so it can be concluded vehicle is definietly not charging. Add current battery level to dataframe and print
+                        reset_stationary_time_at_charger(vehicle)
                         decrease_battery_status(vehicle,energy_offtake)
                         battery_flat(vehicle, current_lat, current_lon, current_date, current_minute)
                         output_file_temp = os.path.join(output_dir, vehicle + ".csv")
                         current_battery_status = get_battery_status(vehicle)
 
                         with open(output_file_temp, 'a') as f_out:
-                            line = "{},{},{},{},{},{},{},0,{},".format(current_minute,current_lat,current_lon,current_alt,current_speed,displacement,energy_offtake,current_battery_status) + "\n"
+                            line = "{},{},{},{},{},{},{},{},0,{},".format(current_minute,current_lat,current_lon,current_alt,current_speed,displacement,energy_offtake,stadionary_time_at_charger,current_battery_status) + "\n"
                             f_out.write(line)
                             write = True
 
@@ -1157,8 +1208,10 @@ def is_it_charging(Scenario_path,current_date):
                         if where_charging != 'N/A':   #Vehicle was charging in the previous datapoint
                             set_where_charging(vehicle, 'N/A')
                             increase_available_chargers(where_charging)
+                            
 
                 else:
+                    reset_stationary_time_at_charger(vehicle)
                     #Vehicle is on the move so it can be concluded vehicle is definietly not charging. Add current battery level to dataframe and print
                     decrease_battery_status(vehicle,energy_offtake)
                     battery_flat(vehicle, current_lat, current_lon, current_date, current_minute)
@@ -1166,7 +1219,7 @@ def is_it_charging(Scenario_path,current_date):
                     current_battery_status = get_battery_status(vehicle)
 
                     with open(output_file_temp, 'a') as f_out:
-                        line = "{},{},{},{},{},{},{},0,{},".format(current_minute,current_lat,current_lon,current_alt,current_speed,displacement,energy_offtake,current_battery_status) + "\n"
+                        line = "{},{},{},{},{},{},{},{},0,{},".format(current_minute,current_lat,current_lon,current_alt,current_speed,displacement,energy_offtake,stadionary_time_at_charger,current_battery_status) + "\n"
                         f_out.write(line)
                         write = True
 
@@ -1174,15 +1227,17 @@ def is_it_charging(Scenario_path,current_date):
                     if where_charging != 'N/A':   #Vehicle was charging in the previous datapoint
                         set_where_charging(vehicle, 'N/A')
                         increase_available_chargers(where_charging)
+                        
 
             else:  #Battery is full and charging cannot take place
+                reset_stationary_time_at_charger(vehicle)
                 decrease_battery_status(vehicle,energy_offtake)
                 battery_flat(vehicle, current_lat, current_lon, current_date, current_minute)
                 output_file_temp = os.path.join(output_dir, vehicle + ".csv")
                 current_battery_status = get_battery_status(vehicle)
 
                 with open(output_file_temp, 'a') as f_out:
-                    line = "{},{},{},{},{},{},{},0,{},".format(current_minute,current_lat,current_lon,current_alt,current_speed,displacement,energy_offtake,current_battery_status) + "\n"
+                    line = "{},{},{},{},{},{},{},{},0,{},".format(current_minute,current_lat,current_lon,current_alt,current_speed,displacement,energy_offtake,stadionary_time_at_charger,current_battery_status) + "\n"
                     f_out.write(line)
                     write = True
 
@@ -1190,6 +1245,7 @@ def is_it_charging(Scenario_path,current_date):
                 if where_charging != 'N/A':   #Vehicle was charging in the previous datapoint
                     set_where_charging(vehicle, 'N/A')
                     increase_available_chargers(where_charging)
+                    
 
 def add_charger_active(name):
     global ChargingStationsObj
