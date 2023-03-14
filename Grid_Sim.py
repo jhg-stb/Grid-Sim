@@ -21,7 +21,7 @@ warnings.filterwarnings("ignore", category=RuntimeWarning)
 #Radius of charging station inaccurary
 charging_radius = 50
 Batterty_Flat = False
-delete_folders = True
+delete_folders = False
 initialise_done = False
 prep_done = False
 todays_mobility_data = {}
@@ -988,13 +988,77 @@ def seperate_solar_information(Scenario_path):
                     writer.writerow(row)
 
 
+def delete_solar_files(directory):
+    folder_path = os.path.join(directory, 'Input', 'External_Batteries')
+    for foldername in os.listdir(folder_path):
+        folder = os.path.join(folder_path, foldername)
+        os.remove(os.path.join(folder, 'Solar_Information.csv'))
+        os.remove(os.path.join(folder, 'Solar_Information_Time_Reformatted.csv'))    
+
+
+def extrapolate_solar_information(Scenario_path):
+    battery_folders_path = os.path.join(Scenario_path, 'Input', 'External_Batteries')
+    battery_folders = [f for f in os.listdir(battery_folders_path) if os.path.isdir(os.path.join(battery_folders_path, f))]
+
+    #Output folder
+    new_folder = os.path.join(Scenario_path, 'Output', 'External_Batteries')
+    os.makedirs(new_folder, exist_ok=True)
+    
+
+    for x in tqdm(range(0,len(battery_folders))):
+
+        temp_path = os.path.join(battery_folders_path, battery_folders[x], 'Daily_Separated_Solar_Information')
+        dates_folder = os.listdir(temp_path)
+
+        new_folder = os.path.join(Scenario_path, 'Output', 'External_Batteries', battery_folders[x])
+        os.makedirs(new_folder, exist_ok=True)
+
+        for folder in dates_folder:
+
+            input_file = os.path.join(temp_path,folder,'Solar_Information.csv')
+            new_folder = os.path.join(Scenario_path, 'Output', 'External_Batteries', battery_folders[x], folder)
+            os.makedirs(new_folder, exist_ok=True)
+
+            with open (input_file, 'r') as f_in:
+            
+                header_row = ("Minute of Day,Energy Generated")
+                reader = csv.reader(f_in)
+                header = next(reader)
+                output_file = os.path.join(new_folder, "Solar_Information_Extrapolated.csv")
+
+                with open (output_file, 'w') as f_out:
+
+                    f_out.write(header_row + '\n')
+
+                    for row in reader:
+                        input_minute = float(row[1])
+                        power = float(row[2])
+
+                        energy = (power*0.5)/30
+
+                        for i in range(0,29):
+                            current_minute = input_minute + i
+
+                            line = "{},{}".format(current_minute,energy) +'\n'
+                            f_out.write(line)
+
+
+
+
+
     
 
 
 def prepare_mobility_files(Scenario_path):
 
-    format_solar_information(Scenario_path)
-    seperate_solar_information(Scenario_path)
+    #Prepare solar information
+    #format_solar_information(Scenario_path)
+    #seperate_solar_information(Scenario_path)
+    global delete_folders
+    if delete_folders == True:
+        delete_solar_files(Scenario_path)
+    extrapolate_solar_information(Scenario_path)
+    
     #Start by downsampling input data to minutely data (remove all second data)
     downsample_input_data(Scenario_path)
 
@@ -1018,12 +1082,8 @@ def prepare_mobility_files(Scenario_path):
     if delete_folders == True:
         shutil.rmtree(folder_path)
 
-    #Prepare solar information
     
-    #
-    #Split up in seperate days
-    #Redo Timing
-    #Extrapolate
+    
 
 def check_and_prepare(Scenario_path):
 
