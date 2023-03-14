@@ -12,6 +12,8 @@ from geopy.distance import geodesic as GD
 import matplotlib.pyplot as plt
 import warnings
 
+external_battery = False
+
 # Ignore the mean of empty slice warning
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
@@ -45,6 +47,14 @@ class TempChargingStationClass:
         self.number_of_chargers = number_of_chargers
         self.charging_power = charging_power
 TempChargingStations = []
+
+class TempExternalBatteryClass:
+    def __init__(self, name, number_of_chargers, charging_power, battery_capacity):
+        self.name = name
+        self.number_of_chargers = number_of_chargers
+        self.charging_power = charging_power
+        self.battery_capacity = battery_capacity
+TempExternalBattery = []
 
 class VehicleClass:
     def __init__(self, name, battery_capacity, efficiency, vehicle_active,latitude,longitude,altitude,speed,battery_status,where_charging,stop_duration):
@@ -82,11 +92,13 @@ def initialise_vehicles(Scenario_path):
 
     #Ask how many vehicles the user wants to have as input
     selection = input('\nHow many vehicles do you want to use as input?  ')
+    while selection.isnumeric() == False:
+        selection = input('That is not a valid number. Please try again: ')
     selection = int(selection)+1
 
 
     #Establish if the user wants to input the vehicle parameters now or later
-    vehicle_input_option = input('\nDo you want to input vehicle parameters now or later enter directly into the designated document?\n1. Now \n2. Later In Document \n')
+    vehicle_input_option = input('\nDo you want to input vehicle parameters now or later in the input foler?\n1. Now \n2. Later In Folder \n')
     while not (vehicle_input_option=='1' or vehicle_input_option=='2'):
         vehicle_input_option = input('\nInvalid option. Please enter a valid option: ')
 
@@ -135,7 +147,7 @@ def initialise_vehicles(Scenario_path):
         if same_battery_cap == '2':
             print('\nPlease enter the individual battery capacity of each vehicle.')
             for obj in TempVehicles:
-                individual_battery_cap = input(obj.name + ': ')
+                individual_battery_cap = input('\n' + obj.name + ': ')
                 obj.battery_capacity = individual_battery_cap
                 
 
@@ -204,13 +216,13 @@ def initialise_vehicles(Scenario_path):
 def initialise_charging_stations(Scenario_path):
     #Ask how many charging stations there are
     selection = input('\nHow many charging stations are there? ')
-    while  selection == '0':
-        selection = input('\n0 is an invalid option. Please enter a valid option. How many charging stations are there? ')
+    while  selection.isnumeric() == False or selection == '0':
+        selection = input('\nThat is an invalid option. Please enter a valid option.')
     selection = int(selection)+1
 
 
     #Establish if the user wants to input the charging data now or later
-    charging_input_option = input('\nDo you want to input charging station information now or later enter directly into the designated document?\n1. Now \n2. Later In Document \n')
+    charging_input_option = input('\nDo you want to input charging station information now or later in the input folder?\n1. Now \n2. Later In Folder \n')
     while not (charging_input_option=='1' or charging_input_option=='2'):
         charging_input_option = input('\nInvalid option. Please enter a valid option: ')
 
@@ -264,6 +276,132 @@ def initialise_charging_stations(Scenario_path):
             line="{},{},{},{}".format(obj.lat,obj.lon,obj.number_of_chargers,obj.charging_power)
             f_parameters.write(line)
 
+def initialise_external_battery(Scenario_path):
+
+    #Create folder for external batter parameters
+    path2 = Scenario_path+'\\'+'Input'
+    os.chdir(path2)
+    os.makedirs('External_Batteries')
+
+    selection = input('\nDoes all the charging stations have an external battery?\n1. Yes\n2. No\n')
+    while not (selection=='1' or selection=='2'):
+        selection = input('\nInvalid option. Please enter a valid option: ')
+    all_charging_stations_battery = selection
+
+
+    if all_charging_stations_battery == '1':
+        #Create external battery folders that correlates to charging stations
+        temp_path = os.path.join(Scenario_path, 'Input', 'Charging_Stations')
+        csv_files = [file for file in os.listdir(temp_path) if file.endswith('.csv')]
+        for csv_file in csv_files:
+            folder_name = csv_file.replace('.csv', '')
+            folder_path = os.path.join(Scenario_path, 'Input', 'External_Batteries', folder_name)
+            os.makedirs(folder_path, exist_ok=True)
+    
+    else:
+        temp_path = os.path.join(Scenario_path, 'Input', 'Charging_Stations')
+        csv_files = [file for file in os.listdir(temp_path) if file.endswith('.csv')]
+        for csv_file in csv_files:
+            folder_name = csv_file.replace('.csv', '')
+            selection = input('\n Does ' + folder_name + ' have an external battery?\n1. Yes\n2. No\n')
+            while not (selection=='1' or selection=='2'):
+                selection = input('\nInvalid option. Please enter a valid option: ')
+            if selection == '1':
+                folder_path = os.path.join(Scenario_path, 'Input', 'External_Batteries', folder_name)
+                os.makedirs(folder_path, exist_ok=True)
+
+
+
+    input_now_or_later = input('\nDo you want enter external battery information now or later in the input folder?\n1. Now \n2. Later In Folder\n')
+    while not (input_now_or_later=='1' or input_now_or_later=='2'):
+        input_now_or_later = input('\nInvalid option. Please enter a valid option: ')
+
+
+    folder_path = os.path.join(Scenario_path, 'Input', 'External_Batteries')
+    folder_names = os.listdir(folder_path)
+
+    if input_now_or_later == '2':
+        for folder in folder_names:
+            name = folder
+            number_of_chargers = '*input value*'
+            charging_power = '*input value*'
+            battery_capacity = '*input value*'
+            TempExternalBattery.append(TempExternalBatteryClass(name,number_of_chargers,charging_power,battery_capacity))
+
+    else:
+        for folder in folder_names:
+                station_name = folder
+                TempExternalBattery.append(TempExternalBatteryClass(station_name,None, None,None))
+
+        #Ask is all batteries have the same capacity
+            #What is the shared value?
+            #What is the individual value?
+        same_battery_cap = input('\nDoes all the external have the same battery capcaity?\n1. Yes \n2. No \n')
+        while not (same_battery_cap=='1' or same_battery_cap=='2'):
+            same_battery_cap = input('\nInvalid option. Please enter a valid option: ')
+        
+        if same_battery_cap == '1':
+            shared_battery_cap = input('\nPlease enter the battery capacity in [kWh]: ')
+            for obj in TempExternalBattery:
+                obj.battery_capacity = shared_battery_cap
+        else:
+            print('\nPlease enter the individual battery capacity of each external battery.')
+            for obj in TempExternalBattery:
+                individual_battery_cap = input('\n' + obj.name + ': ')
+                obj.battery_capacity = individual_battery_cap
+
+
+        #Ask is all batteries have the same number of chargers
+            #What is the shared value?
+            #What is the individual value?
+        same_number_of_chargers = input('\nDoes all the external batteries have the same number of output chargering points?\n1. Yes \n2. No \n')
+        while not (same_number_of_chargers=='1' or same_number_of_chargers=='2'):
+            same_number_of_chargers = input('\nInvalid option. Please enter a valid option: ')
+        
+        if same_number_of_chargers == '1':
+            number_of_chargers = input('\nPlease enter the number of charging points: ')
+            for obj in TempExternalBattery:
+                obj.number_of_chargers = number_of_chargers
+        else:
+            print('\nPlease enter the individual number of charging points of each external battery.')
+            for obj in TempExternalBattery:
+                number_of_chargers = input('\n' + obj.name + ': ')
+                obj.number_of_chargers = number_of_chargers
+
+        #Ask is all batteries have the same charging speed
+            #What is the shared value?
+            #What is the individual value?
+        same_charging_speed = input('\nDoes all the external batteries have the same output charging speed?\n1. Yes \n2. No \n')
+        while not (same_charging_speed=='1' or same_charging_speed=='2'):
+            same_charging_speed = input('\nInvalid option. Please enter a valid option: ')
+        
+        if same_charging_speed == '1':
+            charging_power = input('\nPlease enter the charging speed in [kW]: ')
+            for obj in TempExternalBattery:
+                obj.charging_power = charging_power
+        else:
+            print('\nPlease enter the individual charging speeds of each external battery in [kW]:')
+            for obj in TempExternalBattery:
+                charging_power = input('\n' + obj.name + ': ')
+                obj.charging_power = charging_power
+
+        
+    for obj in TempExternalBattery:
+            temp_path = Scenario_path+'\\'+'Input'+'\\'+'External_Batteries'+'\\'+obj.name
+            os.chdir(temp_path)
+            with open('Battery_Parameters.csv', 'w') as f_parameters:
+                header = ("Battery Capacity [kWh],Charging Power [kW],Number of Chargers")
+                f_parameters.write(header + '\n')
+                line="{},{},{}".format(obj.battery_capacity,obj.charging_power,obj.number_of_chargers)
+                f_parameters.write(line)
+    
+
+
+
+
+
+
+
 def initialise(Scenario_path):
     
     os.chdir(Scenario_path)
@@ -286,7 +424,7 @@ def initialise(Scenario_path):
     Output_folder = 'Output'
     os.makedirs(Output_folder)
 
-    #Create Output Folder
+    #Create Input Folder
     path2 = Scenario_path+'\\'+'Input'
     os.chdir(path2)
     os.makedirs('Vehicles')
@@ -299,8 +437,19 @@ def initialise(Scenario_path):
     initialise_vehicles(Scenario_path)
     initialise_charging_stations(Scenario_path)
 
+    selection = input('\nDo you want to include an external stationary battery at each charging station in this simulation?\n1. Yes \n2. No\n')
+    while not (selection=='1' or selection=='2'):
+        selection = input('\nInvalid option. Please enter a valid option: ')
+
+
     
-    print('\nScenario folder succesfully created. Populate the Input folders accordingly.\nOnce populated, press ENTER, or rerun Grid-Sim and select option 1.')
+    if selection == '1':
+        initialise_external_battery(Scenario_path)
+
+
+
+    
+    print('\nScenario folder succesfully created. Populate the Input folders accordingly.\nIMPORTANT: Ensure that the charging station name correlates with applicable external battery, if applicable.\nOnce populated, press ENTER, or rerun Grid-Sim and select option 1.')
     enter = input()
 
 
@@ -340,6 +489,14 @@ def check_if_folders_complete(Scenario_path):
         print('\Charging_Stations folder not created in scenario directory. Please populate manually or reinitialise this scenario.')
         exit()
 
+    global external_battery
+    temp_path = Scenario_path+'\\'+'Input'+'\\'+'External_Batteries'
+    isExist = os.path.exists(temp_path)
+    if isExist==True:
+        print('\External_Batteries folder found. This simulation will include the use of external batteries from here on.')
+        external_battery = True
+
+
 
     #Check if Vehicles folder has information
     temp_path = Scenario_path+'\\'+'Input'+'\\'+'Vehicles'
@@ -348,7 +505,16 @@ def check_if_folders_complete(Scenario_path):
         print('\nNo vehicles have been defined in this scenario. Please populate manually or reinitialise this scenario.')
         exit()
 
-    #Check if Chargin_Stations folder has information
+    if external_battery == True:
+        temp_path = Scenario_path+'\\'+'Input'+'\\'+'External_Batteries'
+        dir = os.listdir(temp_path)
+        if len(dir)==0:
+            print('\nNo external batteries have been defined in this scenario. Please populate manually or reinitialise this scenario.')
+            exit()
+
+
+
+    #Check if Charging_Stations folder has information
     dir_path = Scenario_path + '\\' + 'Input' + '\\' + 'Charging_Stations'
     files = os.listdir(dir_path)
 
@@ -361,26 +527,39 @@ def check_if_folders_complete(Scenario_path):
     #Check if individual vehicle folders have Mobility_Data.csv and Vehicle_Parameters.csv documents
     dir_path = Scenario_path+'\\'+'Input'+'\\'+'Vehicles'
     folders = [f for f in os.listdir(dir_path) if os.path.isdir(os.path.join(dir_path, f))]
-
     for i in range(len(folders)):
         sub_dir_path = dir_path + '\\' + folders[i]
         files = os.listdir(sub_dir_path)
         if not any([x for x in files if x.startswith('Vehicle_Parameters') and x.endswith('.csv')]):
             print(f"Vehicle_Parameters.csv not found in {folders[i]} directory. Please populate manually or reinitialise this scenario.")
             exit()
-            
-
     print("All Vehicle_Parameters.csv files found in appropriate directories.")
-
     for i in range(len(folders)):
         sub_dir_path = dir_path + '\\' + folders[i]
         files = os.listdir(sub_dir_path)
         if not any([x for x in files if x.startswith('Mobility_Data') and x.endswith('.csv')]):
             print(f"Mobility_Data.csv not found in {folders[i]} directory. Please populate manually or reinitialise this scenario.")
             exit()
-            
-
     print("All Mobility_Data.csv files found in appropriate directories.")
+
+    #Check if individual battery folders have Battery_Parameters.csv and Solar_Information.csv documents
+    if external_battery == True:    
+        dir_path = Scenario_path+'\\'+'Input'+'\\'+'External_Batteries'
+        folders = [f for f in os.listdir(dir_path) if os.path.isdir(os.path.join(dir_path, f))]
+        for i in range(len(folders)):
+            sub_dir_path = dir_path + '\\' + folders[i]
+            files = os.listdir(sub_dir_path)
+            if not any([x for x in files if x.startswith('Battery_Parameters') and x.endswith('.csv')]):
+                print(f"Battery_Parameters.csv not found in {folders[i]} directory. Please populate manually or reinitialise this scenario.")
+                exit()
+        print("All Battery_Parameters.csv files found in appropriate directories.")
+        for i in range(len(folders)):
+            sub_dir_path = dir_path + '\\' + folders[i]
+            files = os.listdir(sub_dir_path)
+            if not any([x for x in files if x.startswith('Solar_Information') and x.endswith('.csv')]):
+                print(f"Solar_Information.csv not found in {folders[i]} directory. Please populate manually or reinitialise this scenario.")
+                exit()
+        print("All Solar_Information.csv files found in appropriate directories.")
 
 def downsample_input_data(Scenario_path):
     dir_path = Scenario_path + '\\' + 'Input' + '\\' + 'Vehicles'
@@ -688,6 +867,8 @@ def check_and_prepare(Scenario_path):
 
     check_if_folders_complete(Scenario_path)
     print("All input files found in appropriate directories.")
+
+    #Ask if you want to include weekend mobility data
 
     prepare_mobility_files(Scenario_path)
 
