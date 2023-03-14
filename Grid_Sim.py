@@ -72,6 +72,21 @@ class VehicleClass:
             self.stop_duration = stop_duration
 Vehicles = []
 
+class BatteryClass:
+    def __init__(self, name, battery_capacity, number_of_chargers, charging_power,available_chargers,chargers_active,energy_delivered,daily_energy_delivered,energy_charged,daily_energy_charged,state_of_charge):
+            self.name = name
+            self.battery_capacity = battery_capacity
+            self.number_of_chargers = number_of_chargers
+            self.charging_power = charging_power
+            self.available_chargers = available_chargers
+            self.chargers_active = chargers_active
+            self.energy_delivered = energy_delivered
+            self.daily_energy_delivered = daily_energy_delivered
+            self.energy_charged = energy_charged
+            self.daily_energy_charged = daily_energy_charged
+            self.state_of_charge = state_of_charge
+ExternalBatteries = []
+
 class ChargingStationClass:
     def __init__(self, name, lat, lon, number_of_chargers, charging_power,available_chargers,chargers_active,energy_delivered,daily_energy_delivered):
         self.name = name
@@ -945,7 +960,7 @@ def seperate_solar_information(Scenario_path):
     folder_list = os.listdir(path)
     file_name = "Solar_Information.csv"
 
-    print('\nSeperaing Solar Information by day:')
+    print('\nSeperaing solar information by day:')
     for folder in tqdm(folder_list):
 
         file_path = os.path.join(path, folder, "Solar_Information_Time_Reformatted.csv")
@@ -1005,6 +1020,7 @@ def extrapolate_solar_information(Scenario_path):
     os.makedirs(new_folder, exist_ok=True)
     
 
+    print('\nExtrapolating solar information')
     for x in tqdm(range(0,len(battery_folders))):
 
         temp_path = os.path.join(battery_folders_path, battery_folders[x], 'Daily_Separated_Solar_Information')
@@ -1013,10 +1029,13 @@ def extrapolate_solar_information(Scenario_path):
         new_folder = os.path.join(Scenario_path, 'Output', 'External_Batteries', battery_folders[x])
         os.makedirs(new_folder, exist_ok=True)
 
+        new_folder = os.path.join(Scenario_path, 'Output', 'External_Batteries', battery_folders[x],'Solar_Information')
+        os.makedirs(new_folder, exist_ok=True)
+
         for folder in dates_folder:
 
             input_file = os.path.join(temp_path,folder,'Solar_Information.csv')
-            new_folder = os.path.join(Scenario_path, 'Output', 'External_Batteries', battery_folders[x], folder)
+            new_folder = os.path.join(Scenario_path, 'Output', 'External_Batteries', battery_folders[x],'Solar_Information', folder)
             os.makedirs(new_folder, exist_ok=True)
 
             with open (input_file, 'r') as f_in:
@@ -1052,8 +1071,8 @@ def extrapolate_solar_information(Scenario_path):
 def prepare_mobility_files(Scenario_path):
 
     #Prepare solar information
-    #format_solar_information(Scenario_path)
-    #seperate_solar_information(Scenario_path)
+    format_solar_information(Scenario_path)
+    seperate_solar_information(Scenario_path)
     global delete_folders
     if delete_folders == True:
         delete_solar_files(Scenario_path)
@@ -1945,6 +1964,27 @@ def plot_average_energy_vs_time(charging_output_dir):
     # Clear the plot for next iteration
     plt.clf()
 
+
+def add_solar_to_battery(Scenario_path):
+    active_dates_directory = os.path.join(Scenario_path, 'Output', 'Power_Offtake_Added')
+    active_dates_list = [f for f in os.listdir(active_dates_directory) if os.path.isdir(os.path.join(active_dates_directory, f))]
+
+    external_batteries_path = os.path.join(Scenario_path, 'Output', 'External_Batteries')
+    external_batteries_list = [f for f in os.listdir(external_batteries_path) if os.path.isdir(os.path.join(external_batteries_path, f))]
+    
+    for i in range(0,len(external_batteries_list)):
+        
+        for x in range(0,len(active_dates_list)):
+
+            output_folder_dir = os.path.join(Scenario_path, 'Output', 'External_Batteries',external_batteries_list[i],active_dates_list[x])
+            os.makedirs(output_folder_dir, exist_ok=True)
+
+
+
+
+    
+
+
 def run(Scenario_path):
 
     offtake_power(Scenario_path)
@@ -1969,7 +2009,8 @@ def run(Scenario_path):
     os.chdir(path)
     os.makedirs('Charging_Stations') 
 
-    
+    #Create folders for each day, for each battery, which adds the eneregy charged from solar. If the solar is less than X, trickle charge from grid
+    #add_solar_to_battery(Scenario_path)
     
 
     global todays_mobility_data
