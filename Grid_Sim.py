@@ -11,6 +11,7 @@ import geopy.distance
 from geopy.distance import geodesic as GD
 import matplotlib.pyplot as plt
 import warnings
+import datetime
 
 external_battery = False
 
@@ -839,7 +840,161 @@ def extrapolate_24hours(Scenario_path):
                         f_out.write(line)
                         day_minute_counter = day_minute_counter + 1
 
+def format_solar_information(Scenario_path):
+
+    path = Scenario_path+'\\'+'Input'+'\\'+'External_Batteries'
+    folder_list = os.listdir(path)
+
+    print('\nReformatting Solar Information:')
+    for folder in tqdm(folder_list):
+        file_path = os.path.join(path, folder, "Solar_Information.csv")
+        with open (file_path, 'r') as f_in:
+
+            header_row = ("Day,Minute of Day,Power Generated")
+
+            reader = csv.reader(f_in)
+            header = next(reader)
+
+            output_file = os.path.join(path,folder, "Solar_Information_Time_Reformatted.csv")
+
+            with open(output_file, 'w') as f_out:
+
+                f_out.write(header_row + '\n')
+
+
+                for row in reader:
+                    date_and_time = row[0]
+                    power = float(row[1]) 
+                    if power < 0:
+                        power = 0
+
+                    if date_and_time[len(date_and_time)-2] == 'a':
+
+                        if date_and_time[len(date_and_time)-8]+date_and_time[len(date_and_time)-7] == '12':
+                            if date_and_time[len(date_and_time)-5] == '0':
+                                minute = 0
+                            else:
+                                minute = 30
+                        else:
+                            if date_and_time[len(date_and_time)-5] == '0':
+                                minute = 60*float(date_and_time[len(date_and_time)-8] + date_and_time[len(date_and_time)-7])
+                            else:
+                                minute = 60*float(date_and_time[len(date_and_time)-8] + date_and_time[len(date_and_time)-7]) + 30
+                    
+                    else:
+                        if date_and_time[len(date_and_time)-8]+date_and_time[len(date_and_time)-7] == '12':
+                            if date_and_time[len(date_and_time)-5] == '0':
+                                minute = 720
+                            else:
+                                minute = 750
+                        else:
+                            if date_and_time[len(date_and_time)-5] == '0':
+                                minute = 60*float(date_and_time[len(date_and_time)-8] + date_and_time[len(date_and_time)-7]) + 720
+                            else:
+                                minute = 60*float(date_and_time[len(date_and_time)-8] + date_and_time[len(date_and_time)-7]) + 750
+
+                    month = date_and_time[0]+date_and_time[1]+date_and_time[2]
+
+                    if month == 'Jan':
+                        month = '01'
+                    elif month == 'Feb':
+                        month = '02'
+                    elif month == 'Mar':
+                        month = '03'
+                    elif month == 'Apr':
+                        month = '04'
+                    elif month == 'May':
+                        month = '05'
+                    elif month == 'Jun':
+                        month = '06'
+                    elif month == 'Jul':
+                        month = '07'
+                    elif month == 'Aug':
+                        month = '08'
+                    elif month == 'Sep':
+                        month = '09'
+                    elif month == 'Oct':
+                        month = '10'
+                    elif month == 'Nov':
+                        month = '11'
+                    else:
+                        month = '12'
+
+                    if date_and_time[5] == ',':
+                        day = '0'+date_and_time[4]
+                    else:
+                        day = date_and_time[4]+date_and_time[5]
+
+                    line = "{}-{},{},{}".format(month,day,minute,power)+ "\n"
+                    f_out.write(line)
+
+                    
+
+
+
+
+
+
+
+
+
+def seperate_solar_information(Scenario_path):
+
+    #Create new folder for solar inforamation data
+    path = Scenario_path+'\\'+'Input'+'\\'+'External_Batteries'
+    folder_list = os.listdir(path)
+    file_name = "Solar_Information.csv"
+
+    print('\nSeperaing Solar Information by day:')
+    for folder in tqdm(folder_list):
+
+        file_path = os.path.join(path, folder, "Solar_Information_Time_Reformatted.csv")
+        
+        # Define the output directory
+        output_dir = os.path.join(path, folder, "Daily_Separated_Solar_Information")
+
+        # Create the output directory if it doesn't exist
+        os.makedirs(output_dir, exist_ok=True)
+
+        # Create a dictionary to store the rows for each date
+        rows_by_date = {}
+
+        # Read the file and group the rows by date
+        with open(file_path, "r") as file:
+            reader = csv.reader(file)
+            header = next(reader)  # skip the header row
+            for row in reader:
+                date_str = row[0]  # assuming date is in the format 'month-day'
+                date = datetime.datetime.strptime(date_str, '%m-%d')
+                year_start = datetime.datetime(date.year, 1, 1)
+                date_num = (date - year_start).days + 1
+                date_key = f"{date.month:02d}-{date.day:02d}"  # use year and day of year as the key
+                if date_key not in rows_by_date:
+                    rows_by_date[date_key] = [row]
+                else:
+                    rows_by_date[date_key].append(row)
+
+        # Create a new folder for each date and save a file for that date
+        for date, rows in rows_by_date.items():
+            # Create a new folder with the date as its name
+            new_folder = os.path.join(output_dir, date)
+            os.makedirs(new_folder, exist_ok=True)
+            # Save a new file with only the rows for that date
+            new_file_path = os.path.join(new_folder, file_name)
+            with open(new_file_path, "w", newline="") as new_file:
+                writer = csv.writer(new_file)
+                writer.writerow(header)
+                for row in rows:
+                    writer.writerow(row)
+
+
+    
+
+
 def prepare_mobility_files(Scenario_path):
+
+    format_solar_information(Scenario_path)
+    seperate_solar_information(Scenario_path)
     #Start by downsampling input data to minutely data (remove all second data)
     downsample_input_data(Scenario_path)
 
@@ -863,12 +1018,17 @@ def prepare_mobility_files(Scenario_path):
     if delete_folders == True:
         shutil.rmtree(folder_path)
 
+    #Prepare solar information
+    
+    #
+    #Split up in seperate days
+    #Redo Timing
+    #Extrapolate
+
 def check_and_prepare(Scenario_path):
 
     check_if_folders_complete(Scenario_path)
     print("All input files found in appropriate directories.")
-
-    #Ask if you want to include weekend mobility data
 
     prepare_mobility_files(Scenario_path)
 
