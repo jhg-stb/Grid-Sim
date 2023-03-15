@@ -12,6 +12,7 @@ from geopy.distance import geodesic as GD
 import matplotlib.pyplot as plt
 import warnings
 import datetime
+import math
 
 external_battery = False
 distance_included = False
@@ -51,10 +52,9 @@ class TempChargingStationClass:
 TempChargingStations = []
 
 class TempExternalBatteryClass:
-    def __init__(self, name, number_of_chargers, charging_power, battery_capacity):
+    def __init__(self, name, charging_power_in, battery_capacity):
         self.name = name
-        self.number_of_chargers = number_of_chargers
-        self.charging_power = charging_power
+        self.charging_power_in = charging_power_in
         self.battery_capacity = battery_capacity
 TempExternalBattery = []
 
@@ -73,20 +73,7 @@ class VehicleClass:
             self.stop_duration = stop_duration
 Vehicles = []
 
-class BatteryClass:
-    def __init__(self, name, battery_capacity, number_of_chargers, charging_power,available_chargers,chargers_active,energy_delivered,daily_energy_delivered,energy_charged,daily_energy_charged,state_of_charge):
-            self.name = name
-            self.battery_capacity = battery_capacity
-            self.number_of_chargers = number_of_chargers
-            self.charging_power = charging_power
-            self.available_chargers = available_chargers
-            self.chargers_active = chargers_active
-            self.energy_delivered = energy_delivered
-            self.daily_energy_delivered = daily_energy_delivered
-            self.energy_charged = energy_charged
-            self.daily_energy_charged = daily_energy_charged
-            self.state_of_charge = state_of_charge
-ExternalBatteries = []
+
 
 class ChargingStationClass:
     def __init__(self, name, lat, lon, number_of_chargers, charging_power,available_chargers,chargers_active,energy_delivered,daily_energy_delivered):
@@ -154,7 +141,7 @@ def initialise_vehicles(Scenario_path):
 
         #All vehicles has the same battery capacity
         if same_battery_cap == '1':
-            standard_battery_capacity = input('\nPlease enter the battery capacity in [kWh]:  ')
+            standard_battery_capacity = input('\nPlease enter the battery capacity in [kWh].\nNOTE: Enter the total capacity. Usable capacity of 80% will be accounted for.\n')
             for obj in TempVehicles:
                 obj.battery_capacity = standard_battery_capacity
 
@@ -340,15 +327,14 @@ def initialise_external_battery(Scenario_path):
     if input_now_or_later == '2':
         for folder in folder_names:
             name = folder
-            number_of_chargers = '*input value*'
-            charging_power = '*input value*'
+            charging_power_in = '*input value*'
             battery_capacity = '*input value*'
-            TempExternalBattery.append(TempExternalBatteryClass(name,number_of_chargers,charging_power,battery_capacity))
+            TempExternalBattery.append(TempExternalBatteryClass(name,charging_power_in,battery_capacity))
 
     else:
         for folder in folder_names:
                 station_name = folder
-                TempExternalBattery.append(TempExternalBatteryClass(station_name,None, None,None))
+                TempExternalBattery.append(TempExternalBatteryClass(station_name, None,None))
 
         #Ask is all batteries have the same capacity
             #What is the shared value?
@@ -368,48 +354,31 @@ def initialise_external_battery(Scenario_path):
                 obj.battery_capacity = individual_battery_cap
 
 
-        #Ask is all batteries have the same number of chargers
+        #Ask is all batteries have the same input charging speed
             #What is the shared value?
             #What is the individual value?
-        same_number_of_chargers = input('\nDoes all the external batteries have the same number of output chargering points?\n1. Yes \n2. No \n')
-        while not (same_number_of_chargers=='1' or same_number_of_chargers=='2'):
-            same_number_of_chargers = input('\nInvalid option. Please enter a valid option: ')
-        
-        if same_number_of_chargers == '1':
-            number_of_chargers = input('\nPlease enter the number of charging points: ')
-            for obj in TempExternalBattery:
-                obj.number_of_chargers = number_of_chargers
-        else:
-            print('\nPlease enter the individual number of charging points of each external battery.')
-            for obj in TempExternalBattery:
-                number_of_chargers = input('\n' + obj.name + ': ')
-                obj.number_of_chargers = number_of_chargers
-
-        #Ask is all batteries have the same charging speed
-            #What is the shared value?
-            #What is the individual value?
-        same_charging_speed = input('\nDoes all the external batteries have the same output charging speed?\n1. Yes \n2. No \n')
+        same_charging_speed = input('\nDoes all the external batteries have the same input charging speed?\n1. Yes \n2. No \n')
         while not (same_charging_speed=='1' or same_charging_speed=='2'):
             same_charging_speed = input('\nInvalid option. Please enter a valid option: ')
         
         if same_charging_speed == '1':
-            charging_power = input('\nPlease enter the charging speed in [kW]: ')
+            charging_power_in = input('\nPlease enter the input charging speed in [kW]: ')
             for obj in TempExternalBattery:
-                obj.charging_power = charging_power
+                obj.charging_power_in = charging_power_in
         else:
-            print('\nPlease enter the individual charging speeds of each external battery in [kW]:')
+            print('\nPlease enter the individual input charging speeds of each external battery in [kW]:')
             for obj in TempExternalBattery:
-                charging_power = input('\n' + obj.name + ': ')
-                obj.charging_power = charging_power
+                charging_power_in = input('\n' + obj.name + ': ')
+                obj.charging_power_in = charging_power_in
 
         
     for obj in TempExternalBattery:
             temp_path = Scenario_path+'\\'+'Input'+'\\'+'External_Batteries'+'\\'+obj.name
             os.chdir(temp_path)
             with open('Battery_Parameters.csv', 'w') as f_parameters:
-                header = ("Battery Capacity [kWh],Charging Power [kW],Number of Chargers")
+                header = ("Battery Capacity [kWh],Charging Power Input [kW]")
                 f_parameters.write(header + '\n')
-                line="{},{},{}".format(obj.battery_capacity,obj.charging_power,obj.number_of_chargers)
+                line="{},{}".format(obj.battery_capacity,obj.charging_power_in)
                 f_parameters.write(line)
     
 def initialise(Scenario_path):
@@ -635,7 +604,9 @@ def downsample_input_data(Scenario_path):
 
 def seperate_daily_mobility_data(Scenario_path):
     dir_downsampled_mobility_folderath = Scenario_path + '\\' + 'Output' + '\\' + 'Downsampled_Mobility_Data'
-                
+    
+    global distance_included
+
     path = Scenario_path+'\\'+'Output'
     os.chdir(path)
     os.makedirs('Daily_Seperated_Downsampled_Mobility_Data')           
@@ -716,6 +687,7 @@ def seperate_daily_mobility_data(Scenario_path):
 def fill_missing_minutes(Scenario_path):
     dir_seperated_daily_FOLDERS = Scenario_path + '\\' + 'Output' + '\\' + 'Daily_Seperated_Downsampled_Mobility_Data'
 
+    global distance_included
     #Create new folder for filled minutes data
     path = Scenario_path+'\\'+'Output'
     os.chdir(path)
@@ -817,7 +789,7 @@ def fill_missing_minutes(Scenario_path):
 def extrapolate_24hours(Scenario_path):
     
     dir_filled_seperated_daily_FOLDERS = Scenario_path + '\\' + 'Output' + '\\' + 'Filled_Minutes_Mobility_Data'
-
+    global distance_included
     #Create new folder for extrapolated data
     path = Scenario_path+'\\'+'Output'
     os.chdir(path)
@@ -991,16 +963,6 @@ def format_solar_information(Scenario_path):
                     line = "{}-{},{},{}".format(month,day,minute,power)+ "\n"
                     f_out.write(line)
 
-                    
-
-
-
-
-
-
-
-
-
 def seperate_solar_information(Scenario_path):
 
     #Create new folder for solar inforamation data
@@ -1050,14 +1012,12 @@ def seperate_solar_information(Scenario_path):
                 for row in rows:
                     writer.writerow(row)
 
-
 def delete_solar_files(directory):
     folder_path = os.path.join(directory, 'Input', 'External_Batteries')
     for foldername in os.listdir(folder_path):
         folder = os.path.join(folder_path, foldername)
         os.remove(os.path.join(folder, 'Solar_Information.csv'))
         os.remove(os.path.join(folder, 'Solar_Information_Time_Reformatted.csv'))    
-
 
 def extrapolate_solar_information(Scenario_path):
     battery_folders_path = os.path.join(Scenario_path, 'Input', 'External_Batteries')
@@ -1088,7 +1048,7 @@ def extrapolate_solar_information(Scenario_path):
 
             with open (input_file, 'r') as f_in:
             
-                header_row = ("Minute of Day,Energy Generated")
+                header_row = ("Minute of Day,Power Generated")
                 reader = csv.reader(f_in)
                 header = next(reader)
                 output_file = os.path.join(new_folder, "Solar_Information_Extrapolated.csv")
@@ -1101,20 +1061,11 @@ def extrapolate_solar_information(Scenario_path):
                         input_minute = float(row[1])
                         power = float(row[2])
 
-                        energy = (power*0.5)/30
-
                         for i in range(0,29):
                             current_minute = input_minute + i
 
-                            line = "{},{}".format(current_minute,energy) +'\n'
+                            line = "{},{}".format(current_minute,power) +'\n'
                             f_out.write(line)
-
-
-
-
-
-    
-
 
 def prepare_mobility_files(Scenario_path):
 
@@ -1149,9 +1100,6 @@ def prepare_mobility_files(Scenario_path):
     if delete_folders == True:
         shutil.rmtree(folder_path)
 
-    
-    
-
 def check_and_prepare(Scenario_path):
 
     check_if_folders_complete(Scenario_path)
@@ -1182,6 +1130,7 @@ def offtake_power(Scenario_path):
 
     global Vehicles
     global VehiclesDF
+    global distance_included
 
     #Create folder for each date in new output folder
     path = Scenario_path+'\\'+'Output'+'\\'+'Power_Offtake_Added'
@@ -1239,6 +1188,9 @@ def offtake_power(Scenario_path):
                     previous_speed = float(first_row[5])
                     previous_alt = float(first_row[4])
 
+                    if len(first_row) > 6 and 0 <= row[6] < len(first_row):
+                        distance_included = True
+                        previous_distance = float(first_row[6])
 
                     header_row = ("Minute of Day,Latitude,Longitude,Altitude,Speed,Displacement [m],Energy Used [kWh]")
 
@@ -1254,15 +1206,18 @@ def offtake_power(Scenario_path):
                             time = float(row[1])
                             speed = float(row[5])
                             alt = float(row[4])
-
-                            previous_location = [previous_lat,previous_lon]
-                            current_location = [lat,lon]
-                            elev_change = alt-previous_alt
-                            dist_lateral = geopy.distance.geodesic(previous_location,current_location).m
-                            dist_traveled = np.sqrt(dist_lateral**2 + elev_change**2)
-                            
-                            if (dist_traveled <= 5) and (dist_traveled > 0):
-                                dist_traveled = 0
+                            if distance_included:
+                                dist_traveled = float(row[6])
+                                
+                            else:
+                                previous_location = [previous_lat,previous_lon]
+                                current_location = [lat,lon]
+                                elev_change = alt-previous_alt
+                                dist_lateral = geopy.distance.geodesic(previous_location,current_location).m
+                                dist_traveled = np.sqrt(dist_lateral**2 + elev_change**2)
+                                
+                                if (dist_traveled <= 5) and (dist_traveled > 0):
+                                    dist_traveled = 0
 
                             if dist_traveled != 0:
                                 energy_discharge = (dist_traveled/1000)*(temp_efficiency) #kWh
@@ -1377,7 +1332,13 @@ def get_battery_status(name):
     for vehicle in Vehicles:
         if vehicle.name == name:
             return vehicle.battery_status
-        
+
+def get_battery_soc(name):
+    global Vehicles
+    for vehicle in Vehicles:
+        if vehicle.name == name:
+            return float(get_battery_status(name))/float(vehicle.battery_capacity)
+
 
 def increase_and_get_stationary_time_at_station(name):
     global Vehicles
@@ -1456,7 +1417,7 @@ def battery_flat(vehicle_name, current_lat, current_lon, current_date, minute_of
     global Batterty_Flat
     
     for vehicle in Vehicles:
-        if vehicle.name == vehicle_name and vehicle.battery_status <= 0:
+        if vehicle.name == vehicle_name and vehicle.battery_status <= 0.2*float(vehicle.battery_status):
             Batterty_Flat = True
 
             hour = str(int(float(minute_of_day)/60))
@@ -1465,7 +1426,7 @@ def battery_flat(vehicle_name, current_lat, current_lon, current_date, minute_of
             minute = str(int(float(minute_of_day) % 60))
             if len(minute) == 1:
                 minute = '0' + minute[0]
-            print("\nThe simulation could not be completed. It was stopped on {} at {}:{}:00 as Vehicle {}'s battery reached 0 at ({},{}). Either increase battery size, or ensure charging prior to this timestamp.".format(current_date, hour,minute, vehicle_name, current_lat, current_lon))
+            print("\nThe simulation could not be completed. It was stopped on {} at {}:{}:00 as Vehicle {}'s battery reached 20% state of charge at ({},{}). Either increase battery size, or ensure charging prior to this timestamp.".format(current_date, hour,minute, vehicle_name, current_lat, current_lon))
             
 def is_it_charging(Scenario_path,current_date):
 
@@ -1577,8 +1538,15 @@ def is_it_charging(Scenario_path,current_date):
                                 #!!!!!!!!!!CHARGING!!!!!!!!!!
 
                                 output_file_temp = os.path.join(output_dir, vehicle + ".csv")
-                                charging_power = get_charging_power(charging_station_name) #kW
-                                temp_vehicle_charged = float(charging_power)/60       #kWh charged in this minute
+
+                                charging_power_available = get_charging_power(charging_station_name) #kW
+                                battery_soc = float(get_battery_soc(vehicle)) 
+                                if battery_soc < 0.85:
+                                    charging_power_actual = charging_power_available
+                                else:
+                                    charging_power_actual = charging_power_available*(1-math.exp((i-85)/4)/120)
+                                temp_vehicle_charged = float(charging_power_actual)/60       #kWh charged in this minute
+                                
                                 decrease_battery_status(vehicle,energy_offtake)
                                 battery_flat(vehicle, current_lat, current_lon, current_date, current_minute)
                                 vehicle_charged = increase_battery_status(vehicle,temp_vehicle_charged)
@@ -1602,8 +1570,15 @@ def is_it_charging(Scenario_path,current_date):
                                 reduce_available_chargers(charging_station_name)
 
                                 output_file_temp = os.path.join(output_dir, vehicle + ".csv")
-                                charging_power = get_charging_power(charging_station_name) #kW
-                                temp_vehicle_charged = float(charging_power)/60       #kWh charged in this minute
+                                
+                                charging_power_available = get_charging_power(charging_station_name) #kW
+                                battery_soc = float(get_battery_soc(vehicle)) 
+                                if battery_soc < 0.85:
+                                    charging_power_actual = charging_power_available
+                                else:
+                                    charging_power_actual = charging_power_available*(1-math.exp((i-85)/4)/120)
+                                temp_vehicle_charged = float(charging_power_actual)/60       #kWh charged in this minute
+                                
                                 decrease_battery_status(vehicle,energy_offtake)
                                 battery_flat(vehicle, current_lat, current_lon, current_date, current_minute)
                                 vehicle_charged = increase_battery_status(vehicle,temp_vehicle_charged)
