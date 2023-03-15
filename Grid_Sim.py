@@ -14,6 +14,7 @@ import warnings
 import datetime
 
 external_battery = False
+distance_included = False
 
 # Ignore the mean of empty slice warning
 warnings.filterwarnings("ignore", category=RuntimeWarning)
@@ -411,13 +412,6 @@ def initialise_external_battery(Scenario_path):
                 line="{},{},{}".format(obj.battery_capacity,obj.charging_power,obj.number_of_chargers)
                 f_parameters.write(line)
     
-
-
-
-
-
-
-
 def initialise(Scenario_path):
     
     os.chdir(Scenario_path)
@@ -595,12 +589,19 @@ def downsample_input_data(Scenario_path):
         temp_output_directory = Scenario_path + '\\' + 'Output' + '\\' + 'Downsampled_Mobility_Data'
         downsampled_mobility_data_file = os.path.join(temp_output_directory, vehicle_folders[i]+'.csv')
 
-        header_row = ("Date,Time,Latitude,Longitude,Altitude,Speed")
+        global distance_included
+        
         previous_minute = 'none'
         with open(mobility_data_file, 'r') as f_in:
             csvreader = csv.DictReader(f_in)
 
             with open(downsampled_mobility_data_file, 'w') as f_out:
+
+                if 'Distance' in csvreader.fieldnames:
+                    distance_included = True
+                    header_row = ("Date,Time,Latitude,Longitude,Altitude,Speed,Distance")
+                else:
+                    header_row = ("Date,Time,Latitude,Longitude,Altitude,Speed")
                 f_out.write(header_row + '\n')
 
 
@@ -618,11 +619,16 @@ def downsample_input_data(Scenario_path):
                     lon = row['Longitude']
                     alt = row['Altitude']
                     speed = int(row['Speed'])
+                    if distance_included:
+                        distance = row['Distance']
 
                     if speed <= 2:
                         speed = 0
 
-                    line = "{},{},{},{},{},{}".format(date,time,lat,lon,alt,speed) + "\n"
+                    if distance_included:
+                        line = "{},{},{},{},{},{},{}".format(date,time,lat,lon,alt,speed,distance) + "\n"
+                    else:
+                        line = "{},{},{},{},{},{}".format(date,time,lat,lon,alt,speed) + "\n"
                     f_out.write(line)
 
                     previous_minute = current_minute
@@ -635,7 +641,10 @@ def seperate_daily_mobility_data(Scenario_path):
     os.makedirs('Daily_Seperated_Downsampled_Mobility_Data')           
             
     downsampled_mobility_data_files = [f for f in os.listdir(dir_downsampled_mobility_folderath) if f.endswith('.csv')]
-    header_row = ("Date,Time,Latitude,Longitude,Altitude,Speed")
+    if distance_included:
+        header_row = ("Date,Time,Latitude,Longitude,Altitude,Speed,Distance")
+    else:
+        header_row = ("Date,Time,Latitude,Longitude,Altitude,Speed")
 
     print('\nSeperating daily mobility data:')
     for i in tqdm(range(0,len(downsampled_mobility_data_files))):
@@ -678,7 +687,11 @@ def seperate_daily_mobility_data(Scenario_path):
                         lon = row['Longitude']
                         alt = row['Altitude']
                         speed = row['Speed']
-                        line = "{},{},{},{},{},{}".format(date,time,lat,lon,alt,speed) + "\n"
+                        if distance_included:
+                            distance = row['Distance']
+                            line = "{},{},{},{},{},{},{}".format(date,time,lat,lon,alt,speed,distance) + "\n"
+                        else:  
+                            line = "{},{},{},{},{},{}".format(date,time,lat,lon,alt,speed) + "\n"
                         f_out.write(line)
 
                 else:
@@ -691,7 +704,11 @@ def seperate_daily_mobility_data(Scenario_path):
                         lon = row['Longitude']
                         alt = row['Altitude']
                         speed = row['Speed']
-                        line = "{},{},{},{},{},{}".format(date,time,lat,lon,alt,speed) + "\n"
+                        if distance_included:
+                            distance = row['Distance']
+                            line = "{},{},{},{},{},{},{}".format(date,time,lat,lon,alt,speed,distance) + "\n"
+                        else:  
+                            line = "{},{},{},{},{},{}".format(date,time,lat,lon,alt,speed) + "\n"
                         f_out.write(line)
 
                 previous_day = day
@@ -732,7 +749,10 @@ def fill_missing_minutes(Scenario_path):
             with open(seperated_mobility_file, 'r') as f_in:
 
                 filled_daily_data = os.path.join(date_directory_filled, seperated_mobility_data_files[i]) 
-                header_row = ("Date,Minute of Day,Latitude,Longitude,Altitude,Speed")
+                if distance_included:
+                    header_row = ("Date,Time,Latitude,Longitude,Altitude,Speed,Distance")
+                else:
+                    header_row = ("Date,Time,Latitude,Longitude,Altitude,Speed")
 
                 reader = csv.reader(f_in)
                 header = next(reader)
@@ -744,6 +764,8 @@ def fill_missing_minutes(Scenario_path):
                 previous_speed = first_row[5]
                 previous_time = first_row[1]
                 previous_alt = first_row[4]
+                if distance_included:
+                    previous_distance = first_row[6]
 
 
                 previous_minute = int(previous_time[0]+previous_time[1])*60 + int(previous_time[3]+previous_time[4])
@@ -751,7 +773,10 @@ def fill_missing_minutes(Scenario_path):
                 with open(filled_daily_data, 'w') as f_out:
                     
                     f_out.write(header_row + '\n')
-                    line = "{},{},{},{},{},{}".format(previous_date,previous_minute,previous_lat,previous_lon,previous_alt,previous_speed) + "\n"
+                    if distance_included:     
+                        line = "{},{},{},{},{},{},{}".format(previous_date,previous_minute,previous_lat,previous_lon,previous_alt,previous_speed,previous_distance) + "\n"
+                    else:  
+                        line = "{},{},{},{},{},{}".format(previous_date,previous_minute,previous_lat,previous_lon,previous_alt,previous_speed) + "\n"
                     f_out.write(line)
 
                     for row in reader:
@@ -762,7 +787,11 @@ def fill_missing_minutes(Scenario_path):
                             while True:
                                 previous_minute = previous_minute+1
                                 speed = 0.0
-                                line = "{},{},{},{},{},{}".format(previous_date,previous_minute,previous_lat,previous_lon,previous_alt,speed) + "\n"
+                                if distance_included:
+                                    distance = 0.0
+                                    line = "{},{},{},{},{},{},{}".format(previous_date,previous_minute,previous_lat,previous_lon,previous_alt,speed,distance) + "\n"
+                                else:
+                                    line = "{},{},{},{},{},{}".format(previous_date,previous_minute,previous_lat,previous_lon,previous_alt,speed) + "\n"
                                 f_out.write(line)
                                 if previous_minute+1 == minute:
                                     break
@@ -772,8 +801,11 @@ def fill_missing_minutes(Scenario_path):
                         lon = row[3]
                         alt = row[4]
                         speed = row[5]
-
-                        line = "{},{},{},{},{},{}".format(date,minute,lat,lon,alt,speed)+ "\n"
+                        if distance_included:
+                            distance = row[6]
+                            line = "{},{},{},{},{},{},{}".format(date,minute,lat,lon,alt,speed,distance)+ "\n"
+                        else:
+                            line = "{},{},{},{},{},{}".format(date,minute,lat,lon,alt,speed)+ "\n"
                         f_out.write(line)
 
                         previous_lat = lat
@@ -821,7 +853,10 @@ def extrapolate_24hours(Scenario_path):
                 day_minute_counter = 0
 
                 extrapolated_daily_data = os.path.join(date_directory_extrapolated, filled_mobility_data_files[i]) 
-                header_row = ("Date,Minute of Day,Latitude,Longitude,Altitude,Speed")
+                if distance_included:
+                    header_row = ("Date,Time,Latitude,Longitude,Altitude,Speed,Distance")
+                else:
+                    header_row = ("Date,Time,Latitude,Longitude,Altitude,Speed")
 
                 reader = csv.reader(f_in)
                 header = next(reader)
@@ -838,20 +873,33 @@ def extrapolate_24hours(Scenario_path):
                         lon = row[3]
                         alt = row[4]
                         speed = row[5]
+                        if distance_included:
+                            distance = row[6]
 
                         while int(minute) != day_minute_counter:
                             speed = '0'
-                            line = "{},{},{},{},{},{}".format(date,day_minute_counter,lat,lon,alt,speed)+ "\n"
+                            if distance_included:
+                                distance = '0'
+                                line = "{},{},{},{},{},{},{}".format(date,day_minute_counter,lat,lon,alt,speed,distance)+ "\n"
+                            else:    
+                                line = "{},{},{},{},{},{}".format(date,day_minute_counter,lat,lon,alt,speed)+ "\n"
                             f_out.write(line)
                             day_minute_counter = day_minute_counter + 1
 
-                        line = "{},{},{},{},{},{}".format(date,minute,lat,lon,alt,speed)+ "\n"
+                        if distance_included:
+                            line = "{},{},{},{},{},{},{}".format(date,minute,lat,lon,alt,speed,distance)+ "\n"
+                        else:
+                            line = "{},{},{},{},{},{}".format(date,minute,lat,lon,alt,speed)+ "\n"
                         f_out.write(line)
                         day_minute_counter = day_minute_counter + 1
 
                     while day_minute_counter != 1440:
                         speed = '0'
-                        line = "{},{},{},{},{},{}".format(date,day_minute_counter,lat,lon,alt,speed)+ "\n"
+                        if distance_included:
+                            distance = '0'
+                            line = "{},{},{},{},{},{},{}".format(date,day_minute_counter,lat,lon,alt,speed,distance)+ "\n"
+                        else:    
+                            line = "{},{},{},{},{},{}".format(date,day_minute_counter,lat,lon,alt,speed)+ "\n"
                         f_out.write(line)
                         day_minute_counter = day_minute_counter + 1
 
