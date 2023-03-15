@@ -29,6 +29,7 @@ prep_done = False
 todays_mobility_data = {}
 VehiclesDF = {}
 ChargingStationsDF = {}
+charging_efficiency = 0.9
 
 number_of_vehicles = 0
 same_battery_cap = 0
@@ -1436,7 +1437,7 @@ def is_it_charging(Scenario_path,current_date):
     os.makedirs(current_date) 
 
     
-
+    global charging_efficiency
 
     output_dir = Scenario_path+'\\'+'Output'+'\\'+'Battery_Level_Added'+'\\'+current_date
 
@@ -1542,9 +1543,9 @@ def is_it_charging(Scenario_path,current_date):
                                 charging_power_available = get_charging_power(charging_station_name) #kW
                                 battery_soc = float(get_battery_soc(vehicle)) 
                                 if battery_soc < 0.85:
-                                    charging_power_actual = charging_power_available
+                                    charging_power_actual = charging_power_available * charging_efficiency
                                 else:
-                                    charging_power_actual = charging_power_available*(1-math.exp((i-85)/4)/120)
+                                    charging_power_actual = charging_power_available*(1-math.exp(((battery_soc*100)-85)/4)/120)*charging_efficiency
                                 temp_vehicle_charged = float(charging_power_actual)/60       #kWh charged in this minute
                                 
                                 decrease_battery_status(vehicle,energy_offtake)
@@ -1574,9 +1575,9 @@ def is_it_charging(Scenario_path,current_date):
                                 charging_power_available = get_charging_power(charging_station_name) #kW
                                 battery_soc = float(get_battery_soc(vehicle)) 
                                 if battery_soc < 0.85:
-                                    charging_power_actual = charging_power_available
+                                    charging_power_actual = charging_power_available*charging_efficiency
                                 else:
-                                    charging_power_actual = charging_power_available*(1-math.exp((i-85)/4)/120)
+                                    charging_power_actual = charging_power_available*(1-math.exp(((battery_soc*100)-85)/4)/120)*charging_efficiency
                                 temp_vehicle_charged = float(charging_power_actual)/60       #kWh charged in this minute
                                 
                                 decrease_battery_status(vehicle,energy_offtake)
@@ -1756,13 +1757,13 @@ def reset_daily_energy(charging_station_name):
         if obj.name == charging_station_name:
             obj.daily_energy_delivered = 0
 
-def grid_impact(Scenario_path,current_date):
+def charging_stations_to_vehicles(Scenario_path,current_date):
 
-    path = Scenario_path+'\\'+'Output'+'\\'+'Charging_Stations'
+    path = Scenario_path+'\\'+'Output'+'\\'+'Charging_Stations_to_Vehicle'
     os.chdir(path)
     os.makedirs(current_date) 
 
-    charging_output_dir = Scenario_path+'\\'+'Output'+'\\'+'Charging_Stations'+'\\' + current_date
+    charging_output_dir = Scenario_path+'\\'+'Output'+'\\'+'Charging_Stations_to_Vehicle'+'\\' + current_date
     #Create output files for charging stations
     header_row = "Time [min],Chargers Active,Power Delivery [kW],Energy Delivery [kWh],Cumulative Daily Energy [kWh]"
     global ChargingStationsObj
@@ -1800,7 +1801,7 @@ def grid_impact(Scenario_path,current_date):
                 add_energy_delivered(currenct_charger, energy_delivered)
                 add_daily_energy_delivered(currenct_charger, energy_delivered)
 
-        #Print all chargin station information
+        #Print all charging station information
         for station in ChargingStationsObj: 
             output_file = os.path.join(charging_output_dir, station.name + ".csv")
             chargers_active = get_chargers_active(station.name)
@@ -1814,6 +1815,7 @@ def grid_impact(Scenario_path,current_date):
             #Clear the current energy delivered and active chargers in CharginStationObj
             reset_chargers_active(station.name)
             reset_energy(station.name)
+
 
 def load_profiles(charging_output_dir):
     # Loop through each day's directory
@@ -1987,7 +1989,6 @@ def plot_average_energy_vs_time(charging_output_dir):
     # Clear the plot for next iteration
     plt.clf()
 
-
 def add_solar_to_battery(Scenario_path):
     active_dates_directory = os.path.join(Scenario_path, 'Output', 'Power_Offtake_Added')
     active_dates_list = [f for f in os.listdir(active_dates_directory) if os.path.isdir(os.path.join(active_dates_directory, f))]
@@ -2030,7 +2031,7 @@ def run(Scenario_path):
 
     path = Scenario_path+'\\'+'Output'
     os.chdir(path)
-    os.makedirs('Charging_Stations') 
+    os.makedirs('Charging_Stations_to_Vehicle') 
 
     #Create folders for each day, for each battery, which adds the eneregy charged from solar. If the solar is less than X, trickle charge from grid
     #add_solar_to_battery(Scenario_path)
@@ -2051,16 +2052,16 @@ def run(Scenario_path):
 
         #With the dataframes created, go through it row by row and do charging
         is_it_charging(Scenario_path,dates_list[i])
-        grid_impact(Scenario_path,dates_list[i])
+        charging_stations_to_vehicles(Scenario_path,dates_list[i])
 
 
 
-    charging_station_ouput = Scenario_path+'\\'+'Output'+'\\'+'Charging_Stations'
-    load_profiles(charging_station_ouput)
-    energy_profiles(charging_station_ouput)
+    #charging_station_ouput = Scenario_path+'\\'+'Output'+'\\'+'Charging_Stations'
+    #load_profiles(charging_station_ouput)
+    #energy_profiles(charging_station_ouput)
 
-    plot_average_power_vs_time(charging_station_ouput)
-    plot_average_energy_vs_time(charging_station_ouput)
+    #plot_average_power_vs_time(charging_station_ouput)
+    #plot_average_energy_vs_time(charging_station_ouput)
 
     
 
