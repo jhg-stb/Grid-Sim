@@ -21,7 +21,7 @@ distance_included = False
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 #Radius of charging station inaccurary
-charging_radius = 50
+charging_radius = 100
 Batterty_Flat = False
 delete_folders = False
 initialise_done = False
@@ -288,9 +288,10 @@ def initialise_external_battery(Scenario_path):
     os.chdir(path2)
     os.makedirs('External_Batteries')
 
-    selection = input('\nDoes all the charging stations have an external battery?\n1. Yes\n2. No\n')
-    while not (selection=='1' or selection=='2'):
-        selection = input('\nInvalid option. Please enter a valid option: ')
+    #selection = input('\nDoes all the charging stations have an external battery?\n1. Yes\n2. No\n')
+    #while not (selection=='1' or selection=='2'):
+        #selection = input('\nInvalid option. Please enter a valid option: ')
+    selection = 1
     all_charging_stations_battery = selection
 
 
@@ -473,7 +474,7 @@ def check_if_folders_complete(Scenario_path):
     temp_path = Scenario_path+'\\'+'Input'+'\\'+'External_Batteries'
     isExist = os.path.exists(temp_path)
     if isExist==True:
-        print('\External_Batteries folder found. This simulation will include the use of external batteries from here on.')
+        print('External_Batteries folder found. This simulation will include the use of external batteries from here on.')
         external_battery = True
 
 
@@ -1790,7 +1791,7 @@ def charging_stations_to_vehicles(Scenario_path,current_date):
     for rows in zip(*readers):
         for i, row in enumerate(rows):
 
-            currenct_charger = row[9]
+            currenct_charger = row[10]
             minute = row[0]
 
             if currenct_charger != '':   #Vehicle is charging
@@ -1996,12 +1997,90 @@ def add_solar_to_battery(Scenario_path):
     external_batteries_path = os.path.join(Scenario_path, 'Output', 'External_Batteries')
     external_batteries_list = [f for f in os.listdir(external_batteries_path) if os.path.isdir(os.path.join(external_batteries_path, f))]
     
-    for i in range(0,len(external_batteries_list)):
+    print('\nAssessing available solar energy for each charging station:')
+    for i in tqdm(range(0,len(external_batteries_list))):
         
         for x in range(0,len(active_dates_list)):
 
-            output_folder_dir = os.path.join(Scenario_path, 'Output', 'External_Batteries',external_batteries_list[i],active_dates_list[x])
-            os.makedirs(output_folder_dir, exist_ok=True)
+            date = active_dates_list[x]
+            month_and_day = date[5]+date[6]+date[7]+date[8]+date[9]
+
+            input_file = os.path.join(Scenario_path, 'Output', 'External_Batteries',external_batteries_list[i],'Solar_Information',month_and_day,'Solar_Information_Extrapolated.csv')
+
+            with open(input_file, 'r') as f_in:
+
+                csvreader = csv.DictReader(f_in)
+
+                output_dir = os.path.join(Scenario_path, 'Output', 'External_Batteries',date)
+                os.makedirs(output_dir, exist_ok=True)
+                output_file = os.path.join(output_dir,external_batteries_list[i]+'.csv')
+
+                header_row = ("Time [min], Solar Energy Available [kWh]")
+
+                with open(output_file, 'w') as f_out:
+
+                    f_out.write(header_row + '\n')
+
+                    for row in csvreader:
+
+                        time = row['Minute of Day']
+                        energy = float(row['Power Generated'])/60
+
+                        line = "{},{}".format(time,energy) + '\n'
+                        f_out.write(line)
+
+        folder_path = Scenario_path + '\\' + 'Output' + '\\' + 'External_Batteries' + '\\' + external_batteries_list[i]
+        if delete_folders == True:
+            shutil.rmtree(folder_path)
+
+
+            
+def combine_solar_and_demand(Scenario_path):
+
+    # Set the paths for the two directories
+    charging_path = os.path.join(Scenario_path, 'Output', 'Charging_Stations_to_Vehicle')
+    battery_path = os.path.join(Scenario_path, 'Output', 'External_Batteries')
+
+    # Get a list of all the dates that have CSV files in the charging directory
+    dates = [f for f in os.listdir(charging_path) if os.path.isdir(os.path.join(charging_path, f)) and len(os.listdir(os.path.join(charging_path, f))) > 0]
+
+    # Loop through each date folder and combine the CSV files for each charging station
+    for date in dates:
+        date_path = os.path.join(charging_path, date)
+        battery_date_path = os.path.join(battery_path, date)
+
+        create_output_dir = os.path.join(Scenario_path, 'Output', 'Vehicle_Demand_and_Solar_Supply')
+        if not os.path.exists(create_output_dir):
+            os.makedirs(create_output_dir)
+
+        output_path = os.path.join(create_output_dir,date)
+
+        # Create the output folder if it does not exist
+        if not os.path.exists(output_path):
+            os.makedirs(output_path)
+
+        # Get a list of all the charging station CSV files in the date folder
+        charging_files = [f for f in os.listdir(date_path) if os.path.isfile(os.path.join(date_path, f)) and f.endswith('.csv')]
+
+        # Loop through each charging station CSV file
+        for charging_file in charging_files:
+            charging_station = os.path.splitext(charging_file)[0]
+
+            # Check if there is a corresponding battery CSV file
+            battery_file = os.path.join(battery_date_path, f'{charging_station}.csv')
+            if os.path.isfile(battery_file):
+                charging_df = pd.read_csv(os.path.join(date_path, charging_file))
+                battery_df = pd.read_csv(battery_file)
+
+                # Merge the two dataframes on the 'Time [min]' column, and keep only the 'Energy Delivery [kWh]' column from the charging dataframe
+                combined_df = pd.merge(battery_df, charging_df[['Time [min]', 'Energy Delivery [kWh]']], on='Time [min]')
+
+                # Save the combined dataframe to a CSV file in the output folder
+                output_file = os.path.join(output_path, f'{charging_station}.csv')
+                combined_df.to_csv(output_file, index=False)
+
+            
+
 
 
 
@@ -2011,10 +2090,23 @@ def add_solar_to_battery(Scenario_path):
 
 def run(Scenario_path):
 
+    
+
+    global delete_folders
     offtake_power(Scenario_path)
     folder_path = Scenario_path + '\\' + 'Output' + '\\' + '24h_Extrapolated_Data'
-    #if delete_folders == True:
-    #    shutil.rmtree(folder_path)
+    if delete_folders == True:
+        shutil.rmtree(folder_path)
+
+    temp_path = Scenario_path+'\\'+'Input'+'\\'+'External_Batteries'
+    isExist = os.path.exists(temp_path)
+    if isExist==True:
+        external_battery = True
+
+    if external_battery:
+        add_solar_to_battery(Scenario_path)
+
+    
 
     
 
@@ -2054,14 +2146,17 @@ def run(Scenario_path):
         is_it_charging(Scenario_path,dates_list[i])
         charging_stations_to_vehicles(Scenario_path,dates_list[i])
 
+    if external_battery:
+        combine_solar_and_demand(Scenario_path)
+    
+        
 
+    charging_station_ouput = Scenario_path+'\\'+'Output'+'\\'+'Charging_Stations_to_Vehicle'
+    load_profiles(charging_station_ouput)
+    energy_profiles(charging_station_ouput)
 
-    #charging_station_ouput = Scenario_path+'\\'+'Output'+'\\'+'Charging_Stations'
-    #load_profiles(charging_station_ouput)
-    #energy_profiles(charging_station_ouput)
-
-    #plot_average_power_vs_time(charging_station_ouput)
-    #plot_average_energy_vs_time(charging_station_ouput)
+    plot_average_power_vs_time(charging_station_ouput)
+    plot_average_energy_vs_time(charging_station_ouput)
 
     
 
