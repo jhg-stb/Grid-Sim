@@ -74,6 +74,13 @@ class VehicleClass:
             self.stop_duration = stop_duration
 Vehicles = []
 
+class ExternalBatteryClass:
+    def __init__(self,name,battery_capacity,battery_soc,charge_input):
+        self.name = name
+        self.battery_capacity = battery_capacity
+        self.battery_soc = battery_soc
+        self.charge_input = charge_input
+ExternalBatteries = []
 
 
 class ChargingStationClass:
@@ -2079,7 +2086,226 @@ def combine_solar_and_demand(Scenario_path):
                 output_file = os.path.join(output_path, f'{charging_station}.csv')
                 combined_df.to_csv(output_file, index=False)
 
+
+def get_battery_soc_by_name(name):
+    global ExternalBatteries
+    for battery in ExternalBatteries:
+        if battery.name == name:
+            return battery.battery_soc
+    return None
+
+def get_battery_capacity_by_name(name):
+    global ExternalBatteries
+    for battery in ExternalBatteries:
+        if battery.name == name:
+            return battery.battery_capacity
+    return None
+
+def reduce_battery_soc(name, reduction):
+    global ExternalBatteries
+    for battery in ExternalBatteries:
+        if battery.name == name:
+            battery.battery_soc -= reduction
             
+def get_charge_input_by_name(name):
+    global ExternalBatteries
+    for battery in ExternalBatteries:
+        if battery.name == name:
+            return battery.charge_input
+    return None
+
+def get_battery_soc_by_name(name):
+    global ExternalBatteries
+    for battery in ExternalBatteries:
+        if battery.name == name:
+            return battery.battery_soc
+        
+def increase_battery_soc(name, increase):
+    global ExternalBatteries
+    for battery in ExternalBatteries:
+        if battery.name == name:
+            battery.battery_soc += increase
+            
+            
+def define_charging_origin(Scenario_path):
+
+    external_battery_input_dir = os.path.join(Scenario_path, 'Input', 'External_Batteries')
+    external_battery_input_folders = [f for f in os.listdir(external_battery_input_dir) if os.path.isdir(os.path.join(external_battery_input_dir, f))] 
+
+    input_dates_dir = os.path.join(Scenario_path, 'Output', 'Vehicle_Demand_and_Solar_Supply')
+    input_dates_folders = [f for f in os.listdir(input_dates_dir) if os.path.isdir(os.path.join(input_dates_dir, f))] 
+
+    global ExternalBatteries
+
+    #Create Output Folders
+    path = Scenario_path+'\\'+'Output'+'\\'+'Charging_Summary'
+    os.makedirs(path, exist_ok=True)
+
+    for i in range(0,len(input_dates_folders)):
+        temp_path = Scenario_path+'\\'+'Output'+'\\'+'Charging_Summary'+'\\'+ input_dates_folders[i]
+        os.makedirs(temp_path, exist_ok=True)
+    
+    for i in range(0,len(external_battery_input_folders)):
+
+        path = Scenario_path + '\\' + 'Input' + '\\' + 'External_Batteries' + '\\' + external_battery_input_folders[i]
+        external_battery_parameter_file = os.path.join(path, 'Battery_Parameters.csv')
+
+        #Create an object for each external battery
+        with open(external_battery_parameter_file, 'r') as f_in:
+
+            reader = csv.reader(f_in)
+            header = next(reader)
+            first_row = next(reader)
+
+            battery_capacity = float(first_row[0])
+            charge_input = float(first_row[1])
+            name = external_battery_input_folders[i]
+            battery_soc = battery_capacity
+
+            battery =  ExternalBatteryClass(name, battery_capacity,battery_soc,charge_input)
+            ExternalBatteries.append(battery)
+
+    print('\nSeperating Grid-charging and External Battery-charging:')
+    for i in tqdm(range(0,len(input_dates_folders))):
+
+        input_date_path = os.path.join(Scenario_path, 'Output', 'Vehicle_Demand_and_Solar_Supply',input_dates_folders[i])
+
+        for file in os.listdir(input_date_path):
+            
+            input_file = os.path.join(input_date_path,file)
+            external_battery_name = os.path.splitext(file)[0]
+            battery_capacity = get_battery_capacity_by_name(external_battery_name)
+
+            
+            with open(input_file, 'r') as f_in:
+
+                reader = csv.reader(f_in)
+                header = next(reader)
+                header_row = ("Time [min],Solar Energy Charged [kWh],Grid Energy Used for Battery [kWh],Battery Charged [kWh],Battery Discharged [kWh],Battery State of Charge [%],Grid Energy Used for Vehicle [kWh],Total Grid Impact [kW]")
+
+                output_file_path = Scenario_path+'\\'+'Output'+'\\'+'Charging_Summary'+'\\'+ input_dates_folders[i]
+                output_file = os.path.join(output_file_path,file)
+                charge_input = float(get_charge_input_by_name(name))
+
+                with open(output_file, 'w') as f_out:
+                    f_out.write(header_row + '\n')
+
+                    for row in reader:
+                        time = row[0]
+                        solar_energy_available = float(row[1])
+                        energy_required = float(row[2])
+
+                        current_charge = get_battery_soc_by_name(external_battery_name)
+                        
+
+                        battery_charged = 0
+                        energy_from_grid_for_vehicle = 0
+
+                        if (current_charge - energy_required) > (battery_capacity*0.2):
+                            #After the required energy is withdrawn, there will be more than 20% battery charge left.
+                            #Charging can take place
+                            battery_discharge = energy_required
+
+                            #reduce battery capacity
+                            reduce_battery_soc(external_battery_name, energy_required)
+
+                            #increase battery capacity
+
+                            space_available = battery_capacity - get_battery_soc_by_name(external_battery_name)
+
+                            if solar_energy_available < space_available:
+                                #Enough battery space to dump the full solar charge
+                                charged_from_solar = solar_energy_available
+                                increase_battery_soc(external_battery_name, charged_from_solar)
+                            else:
+                                charged_from_solar = space_available
+                                increase_battery_soc(external_battery_name, charged_from_solar)
+
+                            battery_charged = battery_charged + charged_from_solar
+
+                            space_available = battery_capacity - get_battery_soc_by_name(external_battery_name)
+
+                            if space_available == 0.0:
+                                #No additional space for grid charging, solar filled up the battery
+                                additional_charge_required = 0
+                            else:
+                                #Additional space for grid charging
+                                if solar_energy_available < charge_input/60:
+                                    #Solar is not enough for input charging speed. Add additional charge from the grid
+                                    additional_charge_required = charge_input/60 - solar_energy_available 
+
+                                    if additional_charge_required < space_available:
+                                        #Enough battery space to dump the full additional grid charge
+                                        increase_battery_soc(external_battery_name, additional_charge_required)
+                                    else:
+                                        #Additional charge from grid is limited by the space left in the battery
+                                        additional_charge_required = space_available
+                                        increase_battery_soc(external_battery_name, additional_charge_required)
+                                else:
+                                    additional_charge_required = 0
+
+                            battery_charged = battery_charged + additional_charge_required
+                        
+                        else:
+                            #External battery level is too low; Vehicle charging will be done from the grid
+                            energy_from_grid_for_vehicle = energy_required
+                            battery_discharge = 0
+
+                            #increase battery capacity
+
+                            space_available = battery_capacity - get_battery_soc_by_name(name)
+
+                            if solar_energy_available < space_available:
+                                #Enough battery space to dump the full solar charge
+                                charged_from_solar = solar_energy_available
+                                increase_battery_soc(external_battery_name, charged_from_solar)
+                            else:
+                                charged_from_solar = space_available
+                                increase_battery_soc(external_battery_name, charged_from_solar)
+
+                            battery_charged = battery_charged + charged_from_solar
+                            space_available = battery_capacity - get_battery_soc_by_name(name)
+
+                            if space_available == 0:
+                                #No additional space for grid charging, solar filled up the battery
+                                additional_charge_required = 0
+                            else:
+                                #Additional space for grid charging
+                                if solar_energy_available < charge_input/60:
+                                    #Solar is not enough for input charging speed. Add additional charge from the grid
+                                    additional_charge_required = charge_input/60 - solar_energy_available
+
+                                    if additional_charge_required < space_available:
+                                        #Enough battery space to dump the full additional grid charge
+                                        increase_battery_soc(external_battery_name, additional_charge_required)
+                                    else:
+                                        #Additional charge from grid is limited by the space left in the battery
+                                        additional_charge_required = space_available
+                                        increase_battery_soc(external_battery_name, additional_charge_required)
+                                else:
+                                    additional_charge_required = 0
+
+                            battery_charged = battery_charged + additional_charge_required
+
+                    
+
+                        battery_soc_in_percentage = (get_battery_soc_by_name(external_battery_name)/battery_capacity)*100
+
+                        grid_impact = energy_from_grid_for_vehicle*60 + additional_charge_required*60
+
+                        line = "{},{},{},{},{},{},{},{}".format(time,charged_from_solar,additional_charge_required,battery_charged,battery_discharge,battery_soc_in_percentage,energy_from_grid_for_vehicle,grid_impact) + '\n'
+                        f_out.write(line)
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2089,6 +2315,8 @@ def combine_solar_and_demand(Scenario_path):
 
 
 def run(Scenario_path):
+
+    define_charging_origin(Scenario_path)
 
     
 
@@ -2148,6 +2376,7 @@ def run(Scenario_path):
 
     if external_battery:
         combine_solar_and_demand(Scenario_path)
+        define_charging_origin(Scenario_path)
     
         
 
