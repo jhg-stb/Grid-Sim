@@ -1798,7 +1798,7 @@ def charging_stations_to_vehicles(Scenario_path,current_date):
 
                 add_charger_active(currenct_charger)
 
-                energy_delivered = float(row[6])
+                energy_delivered = float(row[8])
                 add_energy_delivered(currenct_charger, energy_delivered)
                 add_daily_energy_delivered(currenct_charger, energy_delivered)
 
