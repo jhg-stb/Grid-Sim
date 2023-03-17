@@ -1805,7 +1805,7 @@ def charging_stations_to_vehicles(Scenario_path,current_date):
 
                 add_charger_active(currenct_charger)
 
-                energy_delivered = float(row[8])
+                energy_delivered = float(row[8])/charging_efficiency
                 add_energy_delivered(currenct_charger, energy_delivered)
                 add_daily_energy_delivered(currenct_charger, energy_delivered)
 
@@ -2181,7 +2181,7 @@ def define_charging_origin(Scenario_path):
 
                 reader = csv.reader(f_in)
                 header = next(reader)
-                header_row = ("Time [min],Solar Energy Charged [kWh],Grid Energy Used for Battery [kWh],Battery Charged [kWh],Battery Discharged [kWh],Battery State of Charge [%],Grid Energy Used for Vehicle [kWh],Total Grid Impact [kW]")
+                header_row = ("Time [min],Solar Energy Charged After Losses [kWh],Grid Energy Used for Battery [kWh],Battery Charged [kWh],Battery Discharged [kWh],Battery State of Charge [%],Grid Energy Used for Vehicle [kWh],Total Grid Impact [kW]")
 
                 output_file_path = Scenario_path+'\\'+'Output'+'\\'+'Charging_Summary'+'\\'+ input_dates_folders[i]
                 output_file = os.path.join(output_file_path,file)
@@ -2215,7 +2215,13 @@ def define_charging_origin(Scenario_path):
 
                             if solar_energy_available < space_available:
                                 #Enough battery space to dump the full solar charge
-                                charged_from_solar = solar_energy_available
+                                battery_soc_in_percentage = (get_battery_soc_by_name(external_battery_name)/battery_capacity)
+                                if battery_soc_in_percentage < 0.85:
+                                    charged_from_solar = solar_energy_available*charging_efficiency
+                                else:
+                                    charged_from_solar = solar_energy_available*charging_efficiency*(1-math.exp(((battery_soc_in_percentage*100)-85)/4)/120)
+                                
+          
                                 increase_battery_soc(external_battery_name, charged_from_solar)
                             else:
                                 charged_from_solar = space_available
@@ -2236,7 +2242,13 @@ def define_charging_origin(Scenario_path):
 
                                     if additional_charge_required < space_available:
                                         #Enough battery space to dump the full additional grid charge
+                                        battery_soc_in_percentage = (get_battery_soc_by_name(external_battery_name)/battery_capacity)
+                                        if battery_soc_in_percentage < 0.85:
+                                            additional_charge_required = additional_charge_required*charging_efficiency
+                                        else:
+                                            additional_charge_required = additional_charge_required*charging_efficiency*(1-math.exp(((battery_soc_in_percentage*100)-85)/4)/120)
                                         increase_battery_soc(external_battery_name, additional_charge_required)
+
                                     else:
                                         #Additional charge from grid is limited by the space left in the battery
                                         additional_charge_required = space_available
@@ -2245,6 +2257,7 @@ def define_charging_origin(Scenario_path):
                                     additional_charge_required = 0
 
                             battery_charged = battery_charged + additional_charge_required
+                            charged_from_grid_to_battery_impact = additional_charge_required/charging_efficiency
                         
                         else:
                             #External battery level is too low; Vehicle charging will be done from the grid
@@ -2257,7 +2270,11 @@ def define_charging_origin(Scenario_path):
 
                             if solar_energy_available < space_available:
                                 #Enough battery space to dump the full solar charge
-                                charged_from_solar = solar_energy_available
+                                battery_soc_in_percentage = (get_battery_soc_by_name(external_battery_name)/battery_capacity)
+                                if battery_soc_in_percentage < 0.85:
+                                    charged_from_solar = solar_energy_available*charging_efficiency
+                                else:
+                                    charged_from_solar = solar_energy_available*charging_efficiency*(1-math.exp(((battery_soc_in_percentage*100)-85)/4)/120)
                                 increase_battery_soc(external_battery_name, charged_from_solar)
                             else:
                                 charged_from_solar = space_available
@@ -2277,6 +2294,11 @@ def define_charging_origin(Scenario_path):
 
                                     if additional_charge_required < space_available:
                                         #Enough battery space to dump the full additional grid charge
+                                        battery_soc_in_percentage = (get_battery_soc_by_name(external_battery_name)/battery_capacity)
+                                        if battery_soc_in_percentage < 0.85:
+                                            additional_charge_required = additional_charge_required*charging_efficiency
+                                        else:
+                                            additional_charge_required = additional_charge_required*charging_efficiency*(1-math.exp(((battery_soc_in_percentage*100)-85)/4)/120)
                                         increase_battery_soc(external_battery_name, additional_charge_required)
                                     else:
                                         #Additional charge from grid is limited by the space left in the battery
@@ -2286,14 +2308,16 @@ def define_charging_origin(Scenario_path):
                                     additional_charge_required = 0
 
                             battery_charged = battery_charged + additional_charge_required
+                            
 
                     
 
                         battery_soc_in_percentage = (get_battery_soc_by_name(external_battery_name)/battery_capacity)*100
+                        charged_from_solar_before_losses = charged_from_solar/charging_efficiency
+                        charged_from_grid_to_battery_impact = additional_charge_required/charging_efficiency
+                        grid_impact = energy_from_grid_for_vehicle*60 + charged_from_grid_to_battery_impact*60
 
-                        grid_impact = energy_from_grid_for_vehicle*60 + additional_charge_required*60
-
-                        line = "{},{},{},{},{},{},{},{}".format(time,charged_from_solar,additional_charge_required,battery_charged,battery_discharge,battery_soc_in_percentage,energy_from_grid_for_vehicle,grid_impact) + '\n'
+                        line = "{},{},{},{},{},{},{},{}".format(time,charged_from_solar_before_losses,charged_from_grid_to_battery_impact,battery_charged,battery_discharge,battery_soc_in_percentage,energy_from_grid_for_vehicle,grid_impact) + '\n'
                         f_out.write(line)
 
 
