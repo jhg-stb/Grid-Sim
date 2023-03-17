@@ -30,6 +30,8 @@ todays_mobility_data = {}
 VehiclesDF = {}
 ChargingStationsDF = {}
 charging_efficiency = 0.9
+external_battery_grid_charging_threshold = 0.3
+external_battery_discharging_threshold = 0.2
 
 number_of_vehicles = 0
 same_battery_cap = 0
@@ -2136,6 +2138,8 @@ def define_charging_origin(Scenario_path):
     input_dates_folders = [f for f in os.listdir(input_dates_dir) if os.path.isdir(os.path.join(input_dates_dir, f))] 
 
     global ExternalBatteries
+    global external_battery_grid_charging_threshold
+    global external_battery_discharging_threshold
 
     #Create Output Folders
     path = Scenario_path+'\\'+'Output'+'\\'+'Charging_Summary'
@@ -2181,11 +2185,12 @@ def define_charging_origin(Scenario_path):
 
                 reader = csv.reader(f_in)
                 header = next(reader)
-                header_row = ("Time [min],Solar Energy Charged After Losses [kWh],Grid Energy Used for Battery [kWh],Battery Charged [kWh],Battery Discharged [kWh],Battery State of Charge [%],Grid Energy Used for Vehicle [kWh],Total Grid Impact [kW]")
+                header_row = ("Time [min],Solar Energy Charged After Losses [kWh],Grid Energy Used for Battery [kWh],Battery Charged [kWh],Battery Discharged [kWh],Battery State of Charge [%],Grid Energy Used for Vehicle [kWh],Total Grid Impact [kW],Cumulative Grid Energy Delivered [kWh]")
 
                 output_file_path = Scenario_path+'\\'+'Output'+'\\'+'Charging_Summary'+'\\'+ input_dates_folders[i]
                 output_file = os.path.join(output_file_path,file)
                 charge_input = float(get_charge_input_by_name(name))
+                cumulative_energy = 0
 
                 with open(output_file, 'w') as f_out:
                     f_out.write(header_row + '\n')
@@ -2201,7 +2206,7 @@ def define_charging_origin(Scenario_path):
                         battery_charged = 0
                         energy_from_grid_for_vehicle = 0
 
-                        if (current_charge - energy_required) > (battery_capacity*0.2):
+                        if (current_charge - energy_required) > (battery_capacity*external_battery_discharging_threshold):
                             #After the required energy is withdrawn, there will be more than 20% battery charge left.
                             #Charging can take place
                             battery_discharge = energy_required
@@ -2231,7 +2236,8 @@ def define_charging_origin(Scenario_path):
 
                             space_available = battery_capacity - get_battery_soc_by_name(external_battery_name)
 
-                            if space_available == 0.0:
+                            battery_soc_in_percentage = (get_battery_soc_by_name(external_battery_name)/battery_capacity)
+                            if battery_soc_in_percentage > external_battery_grid_charging_threshold:
                                 #No additional space for grid charging, solar filled up the battery
                                 additional_charge_required = 0
                             else:
@@ -2283,7 +2289,7 @@ def define_charging_origin(Scenario_path):
                             battery_charged = battery_charged + charged_from_solar
                             space_available = battery_capacity - get_battery_soc_by_name(name)
 
-                            if space_available == 0:
+                            if battery_soc_in_percentage > external_battery_grid_charging_threshold:
                                 #No additional space for grid charging, solar filled up the battery
                                 additional_charge_required = 0
                             else:
@@ -2316,17 +2322,126 @@ def define_charging_origin(Scenario_path):
                         charged_from_solar_before_losses = charged_from_solar/charging_efficiency
                         charged_from_grid_to_battery_impact = additional_charge_required/charging_efficiency
                         grid_impact = energy_from_grid_for_vehicle*60 + charged_from_grid_to_battery_impact*60
+                        cumulative_energy = cumulative_energy + grid_impact/60
 
-                        line = "{},{},{},{},{},{},{},{}".format(time,charged_from_solar_before_losses,charged_from_grid_to_battery_impact,battery_charged,battery_discharge,battery_soc_in_percentage,energy_from_grid_for_vehicle,grid_impact) + '\n'
+                        line = "{},{},{},{},{},{},{},{},{}".format(time,charged_from_solar_before_losses,charged_from_grid_to_battery_impact,battery_charged,battery_discharge,battery_soc_in_percentage,energy_from_grid_for_vehicle,grid_impact,cumulative_energy) + '\n'
                         f_out.write(line)
 
 
 
+def plot_average_power_vs_time_for_battery(charging_output_dir):
+    # Get the list of all day directories
+    day_dirs = [day_dir for day_dir in os.listdir(charging_output_dir) if os.path.isdir(os.path.join(charging_output_dir, day_dir))]
+    
+    # Create a dictionary to store the cumulative power for each charging station
+    charging_stations = {}
+    
+    # Loop through each day directory
+    for day_dir in day_dirs:
+        day_path = os.path.join(charging_output_dir, day_dir)
+        
+        # Loop through each charging station's CSV file
+        for csv_file in os.listdir(day_path):
+            # Check if the file is a CSV file
+            if not csv_file.endswith('.csv'):
+                continue
+            
+            csv_path = os.path.join(day_path, csv_file)
+            
+            # Load CSV data into a pandas dataframe
+            df = pd.read_csv(csv_path)
+            
+            # Get the power column from the dataframe
+            power = df['Total Grid Impact [kW]'].values
+            
+            # Pad the array with NaNs if it's length is less than 1440 (24 hours x 60 minutes)
+            if len(power) < 1440:
+                power = np.pad(power, (0, 1440-len(power)), 'constant', constant_values=(np.nan, np.nan))
+            
+            # Add the power values to the cumulative power dictionary
+            if csv_file in charging_stations:
+                charging_stations[csv_file] = np.vstack((charging_stations[csv_file], power))
+            else:
+                charging_stations[csv_file] = np.array([power])
+    
+    # Plot the average power versus time for each charging station
+    print('\nGenerating average power delivery for all charging stations:')
+    for charging_station, power_values in tqdm(charging_stations.items()):
+        # Calculate the average power for each minute of the day
+        average_power = np.nanmean(power_values, axis=0)
+        
+        # Plot the average power versus time
+        plt.plot(average_power, label=charging_station[:-4])
+        
+    plt.xlabel('Time [min]')
+    plt.ylabel('Power [kW]')
+    plt.title("Average Power versus Time for All Batteries In Charging Stations")
+    plt.legend()
+    
+    # Save the plot as PNG file
+    plot_path = os.path.join(charging_output_dir, "Average_Power_versus_Time" + '.png')
+    plt.savefig(plot_path)
+    
+    # Clear the plot for next iteration
+    plt.clf()
 
 
 
-
-
+def plot_average_energy_vs_time_for_battery(charging_output_dir):
+    # Get the list of all day directories
+    day_dirs = [day_dir for day_dir in os.listdir(charging_output_dir) if os.path.isdir(os.path.join(charging_output_dir, day_dir))]
+    
+    # Create a dictionary to store the cumulative power for each charging station
+    charging_stations = {}
+    
+    # Loop through each day directory
+    for day_dir in day_dirs:
+        day_path = os.path.join(charging_output_dir, day_dir)
+        
+        # Loop through each charging station's CSV file
+        for csv_file in os.listdir(day_path):
+            # Check if the file is a CSV file
+            if not csv_file.endswith('.csv'):
+                continue
+            
+            csv_path = os.path.join(day_path, csv_file)
+            
+            # Load CSV data into a pandas dataframe
+            df = pd.read_csv(csv_path)
+            
+            # Get the power column from the dataframe
+            power = df['Cumulative Grid Energy Delivered [kWh]'].values
+            
+            # Pad the array with NaNs if it's length is less than 1440 (24 hours x 60 minutes)
+            if len(power) < 1440:
+                power = np.pad(power, (0, 1440-len(power)), 'constant', constant_values=(np.nan, np.nan))
+            
+            # Add the power values to the cumulative power dictionary
+            if csv_file in charging_stations:
+                charging_stations[csv_file] = np.vstack((charging_stations[csv_file], power))
+            else:
+                charging_stations[csv_file] = np.array([power])
+    
+    # Plot the average power versus time for each charging station
+    print('\nGenerating average cumulative daily energy for all charging stations:')
+    for charging_station, power_values in tqdm(charging_stations.items()):
+        # Calculate the average power for each minute of the day
+        average_power = np.nanmean(power_values, axis=0)
+        
+        # Plot the average power versus time
+        plt.plot(average_power, label=charging_station[:-4])
+        
+    plt.xlabel('Time [min]')
+    plt.ylabel('Cumulative Daily Energy [kWh]')
+    plt.title("Average Energy versus Time for All Charging Stations")
+    plt.legend()
+    
+    # Save the plot as PNG file
+    plot_path = os.path.join(charging_output_dir, "Average_Energy_versus_Time" + '.png')
+    plt.savefig(plot_path)
+    
+    # Clear the plot for next iteration
+    plt.clf()
 
 
 
@@ -2340,7 +2455,7 @@ def define_charging_origin(Scenario_path):
 
 def run(Scenario_path):
 
-    define_charging_origin(Scenario_path)
+    
 
     
 
@@ -2402,7 +2517,7 @@ def run(Scenario_path):
         combine_solar_and_demand(Scenario_path)
         define_charging_origin(Scenario_path)
     
-        
+    
 
     charging_station_ouput = Scenario_path+'\\'+'Output'+'\\'+'Charging_Stations_to_Vehicle'
     load_profiles(charging_station_ouput)
@@ -2410,6 +2525,14 @@ def run(Scenario_path):
 
     plot_average_power_vs_time(charging_station_ouput)
     plot_average_energy_vs_time(charging_station_ouput)
+
+    define_charging_origin(Scenario_path)
+    battery_ouput = Scenario_path+'\\'+'Output'+'\\'+'Charging_Summary'
+    plot_average_power_vs_time_for_battery(battery_ouput)
+    plot_average_energy_vs_time_for_battery(battery_ouput)
+
+
+    
 
     
 
