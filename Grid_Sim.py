@@ -11,17 +11,20 @@ import geopy.distance
 from geopy.distance import geodesic as GD
 import matplotlib.pyplot as plt
 import warnings
-import datetime
 import math
+import datetime
+from datetime import datetime as dt
 
 external_battery = False
 distance_included = False
+WorldBankData = True
+weekend_results_only = True
 
 # Ignore the mean of empty slice warning
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 #Radius of charging station inaccurary
-charging_radius = 100
+charging_radius = 10
 Batterty_Flat = False
 delete_folders = False
 initialise_done = False
@@ -30,8 +33,9 @@ todays_mobility_data = {}
 VehiclesDF = {}
 ChargingStationsDF = {}
 charging_efficiency = 0.9
-external_battery_grid_charging_threshold = 0.3
+external_battery_grid_charging_threshold = 0.35
 external_battery_discharging_threshold = 0.2
+stationary_time_threshold = 5
 
 number_of_vehicles = 0
 same_battery_cap = 0
@@ -318,7 +322,8 @@ def initialise_external_battery(Scenario_path):
         csv_files = [file for file in os.listdir(temp_path) if file.endswith('.csv')]
         for csv_file in csv_files:
             folder_name = csv_file.replace('.csv', '')
-            selection = input('\n Does ' + folder_name + ' have an external battery?\n1. Yes\n2. No\n')
+            selection = 1
+            # selection = input('\n Does ' + folder_name + ' have an external battery?\n1. Yes\n2. No\n')
             while not (selection=='1' or selection=='2'):
                 selection = input('\nInvalid option. Please enter a valid option: ')
             if selection == '1':
@@ -437,7 +442,6 @@ def initialise(Scenario_path):
         initialise_external_battery(Scenario_path)
 
 
-
     
     print('\nScenario folder succesfully created. Populate the Input folders accordingly.\nIMPORTANT: Ensure that the charging station name correlates with applicable external battery, if applicable.\nOnce populated, press ENTER, or rerun Grid-Sim and select option 1.')
     enter = input()
@@ -483,7 +487,6 @@ def check_if_folders_complete(Scenario_path):
     temp_path = Scenario_path+'\\'+'Input'+'\\'+'External_Batteries'
     isExist = os.path.exists(temp_path)
     if isExist==True:
-        print('External_Batteries folder found. This simulation will include the use of external batteries from here on.')
         external_battery = True
 
 
@@ -642,7 +645,7 @@ def seperate_daily_mobility_data(Scenario_path):
             for row in csvreader:
 
                 date = row['Date']
-                day = date[9]
+                day = date[5]+date[6]+date[8]+date[9]
 
                 #Check first if it is a new date
 
@@ -812,7 +815,7 @@ def extrapolate_24hours(Scenario_path):
 
     #Output folder directory
     dir_extrapolated_data = Scenario_path + '\\' + 'Output' + '\\' + '24h_Extrapolated_Data'
-
+    global WorldBankData
 
     print('\nExtrapolating data over 24hours for each date:')
     for i in tqdm(range(0,len(dates_folders))):
@@ -863,7 +866,10 @@ def extrapolate_24hours(Scenario_path):
                             speed = '0'
                             if distance_included:
                                 distance = '0'
-                                line = "{},{},{},{},{},{},{}".format(date,day_minute_counter,lat,lon,alt,speed,distance)+ "\n"
+                                if WorldBankData:
+                                    lat = 0
+                                    lon = 0
+                                    line = "{},{},{},{},{},{},{}".format(date,day_minute_counter,lat,lon,alt,speed,distance)+ "\n"
                             else:    
                                 line = "{},{},{},{},{},{}".format(date,day_minute_counter,lat,lon,alt,speed)+ "\n"
                             f_out.write(line)
@@ -1080,13 +1086,19 @@ def extrapolate_solar_information(Scenario_path):
 
 def prepare_mobility_files(Scenario_path):
 
-    #Prepare solar information
-    format_solar_information(Scenario_path)
-    seperate_solar_information(Scenario_path)
-    global delete_folders
-    if delete_folders == True:
-        delete_solar_files(Scenario_path)
-    extrapolate_solar_information(Scenario_path)
+    #Prepare solar information; check if external batteries are included
+    global external_battery
+    temp_path = Scenario_path+'\\'+'Input'+'\\'+'External_Batteries'
+    isExist = os.path.exists(temp_path)
+    if isExist==True:
+        print('External_Batteries folder found. This simulation will include the use of external batteries from here on.')
+        external_battery = True
+        format_solar_information(Scenario_path)
+        seperate_solar_information(Scenario_path)
+        global delete_folders
+        if delete_folders == True:
+            delete_solar_files(Scenario_path)
+        extrapolate_solar_information(Scenario_path)
     
     #Start by downsampling input data to minutely data (remove all second data)
     downsample_input_data(Scenario_path)
@@ -1199,7 +1211,7 @@ def offtake_power(Scenario_path):
                     previous_speed = float(first_row[5])
                     previous_alt = float(first_row[4])
 
-                    if len(first_row) > 6 and 0 <= row[6] < len(first_row):
+                    if len(first_row) == 7:
                         distance_included = True
                         previous_distance = float(first_row[6])
 
@@ -1428,7 +1440,7 @@ def battery_flat(vehicle_name, current_lat, current_lon, current_date, minute_of
     global Batterty_Flat
     
     for vehicle in Vehicles:
-        if vehicle.name == vehicle_name and vehicle.battery_status <= 0.2*float(vehicle.battery_status):
+        if vehicle.name == vehicle_name and vehicle.battery_status <= 0.2*float(vehicle.battery_capacity):
             Batterty_Flat = True
 
             hour = str(int(float(minute_of_day)/60))
@@ -1451,7 +1463,7 @@ def is_it_charging(Scenario_path,current_date):
 
     output_dir = Scenario_path+'\\'+'Output'+'\\'+'Battery_Level_Added'+'\\'+current_date
 
-    header_row = "Minute of Day,Latitude,Longitude,Altitude,Speed,Displacement [m],Energy Used [kWh],Stationary Charging Oppurtinuty Time at Charging Station [min],Battery Charged [kWh],Battery Level [kWh],Where I'm Charging"
+    header_row = "Minute of Day,Latitude,Longitude,Altitude,Speed,Displacement [m],Energy Used [kWh],Stationary Charging Oppurtinuty Time at Charging Station [min],Battery Charged [kWh],Battery Level [%],Where I'm Charging"
 
     #Directory of power offtake folders
     input_date = Scenario_path + '\\' + 'Output' + '\\' + 'Power_Offtake_Added' + '\\' + current_date
@@ -1470,6 +1482,7 @@ def is_it_charging(Scenario_path,current_date):
 
     global ChargingStations
     global Batterty_Flat
+    global stationary_time_threshold
 
     for reader in readers:
         next(reader) # Skip the header row in each file
@@ -1563,14 +1576,15 @@ def is_it_charging(Scenario_path,current_date):
                                 vehicle_charged = increase_battery_status(vehicle,temp_vehicle_charged)
                                 new_battery_status = float(get_battery_status(vehicle))
                                 where_charging = get_where_charging(vehicle)
+                                battery_soc_percentage = get_battery_soc(vehicle)
 
                                 with open(output_file_temp, 'a') as f_out:
-                                    line = "{},{},{},{},{},{},{},{},{},{},{}".format(current_minute,current_lat,current_lon,current_alt,current_speed,displacement,energy_offtake,stadionary_time_at_charger,vehicle_charged,new_battery_status,where_charging) + "\n"
+                                    line = "{},{},{},{},{},{},{},{},{},{},{}".format(current_minute,current_lat,current_lon,current_alt,current_speed,displacement,energy_offtake,stadionary_time_at_charger,vehicle_charged,battery_soc_percentage,where_charging) + "\n"
                                     f_out.write(line)
                                     write = True
                             
                             
-                            elif available_charger == True and write == False and stadionary_time_at_charger >= 5:   #Vehicle is new to this station, reduce the number of chargers available and set name of station
+                            elif available_charger == True and write == False and stadionary_time_at_charger >= stationary_time_threshold:   #Vehicle is new to this station, reduce the number of chargers available and set name of station
                                 #!!!!!!!!!!CHARGING!!!!!!!!!!
 
                                 #Sets the name of where it is currently charging
@@ -1594,20 +1608,21 @@ def is_it_charging(Scenario_path,current_date):
                                 battery_flat(vehicle, current_lat, current_lon, current_date, current_minute)
                                 vehicle_charged = increase_battery_status(vehicle,temp_vehicle_charged)
                                 new_battery_status = float(get_battery_status(vehicle))
-
+                                battery_soc_percentage = get_battery_soc(vehicle)
                                 with open(output_file_temp, 'a') as f_out:
-                                    line = "{},{},{},{},{},{},{},{},{},{},{}".format(current_minute,current_lat,current_lon,current_alt,current_speed,displacement,energy_offtake,stadionary_time_at_charger,vehicle_charged,new_battery_status,where_charging) + "\n"
+                                    line = "{},{},{},{},{},{},{},{},{},{},{}".format(current_minute,current_lat,current_lon,current_alt,current_speed,displacement,energy_offtake,stadionary_time_at_charger,vehicle_charged,battery_soc_percentage,where_charging) + "\n"
                                     f_out.write(line)
                                     write = True
 
-                            elif stadionary_time_at_charger < 5:
+                            elif stadionary_time_at_charger < stationary_time_threshold:
                                 #Vehicle is at charging station, but not long enough to start charging
                                 decrease_battery_status(vehicle,energy_offtake)
                                 battery_flat(vehicle, current_lat, current_lon, current_date, current_minute)
                                 output_file_temp = os.path.join(output_dir, vehicle + ".csv")
                                 current_battery_status = get_battery_status(vehicle)
+                                battery_soc_percentage = get_battery_soc(vehicle)
                                 with open(output_file_temp, 'a') as f_out:
-                                    line = "{},{},{},{},{},{},{},{},0,{},".format(current_minute,current_lat,current_lon,current_alt,current_speed,displacement,energy_offtake,stadionary_time_at_charger,current_battery_status) + "\n"
+                                    line = "{},{},{},{},{},{},{},{},0,{},".format(current_minute,current_lat,current_lon,current_alt,current_speed,displacement,energy_offtake,stadionary_time_at_charger,battery_soc_percentage) + "\n"
                                     f_out.write(line)
                                     write =  True
 
@@ -1629,9 +1644,10 @@ def is_it_charging(Scenario_path,current_date):
                         battery_flat(vehicle, current_lat, current_lon, current_date, current_minute)
                         output_file_temp = os.path.join(output_dir, vehicle + ".csv")
                         current_battery_status = get_battery_status(vehicle)
+                        battery_soc_percentage = get_battery_soc(vehicle)
 
                         with open(output_file_temp, 'a') as f_out:
-                            line = "{},{},{},{},{},{},{},{},0,{},".format(current_minute,current_lat,current_lon,current_alt,current_speed,displacement,energy_offtake,stadionary_time_at_charger,current_battery_status) + "\n"
+                            line = "{},{},{},{},{},{},{},{},0,{},".format(current_minute,current_lat,current_lon,current_alt,current_speed,displacement,energy_offtake,stadionary_time_at_charger,battery_soc_percentage) + "\n"
                             f_out.write(line)
                             write =  True
 
@@ -1652,9 +1668,10 @@ def is_it_charging(Scenario_path,current_date):
                         battery_flat(vehicle, current_lat, current_lon, current_date, current_minute)
                         output_file_temp = os.path.join(output_dir, vehicle + ".csv")
                         current_battery_status = get_battery_status(vehicle)
+                        battery_soc_percentage = get_battery_soc(vehicle)
 
                         with open(output_file_temp, 'a') as f_out:
-                            line = "{},{},{},{},{},{},{},{},0,{},".format(current_minute,current_lat,current_lon,current_alt,current_speed,displacement,energy_offtake,stadionary_time_at_charger,current_battery_status) + "\n"
+                            line = "{},{},{},{},{},{},{},{},0,{},".format(current_minute,current_lat,current_lon,current_alt,current_speed,displacement,energy_offtake,stadionary_time_at_charger,battery_soc_percentage) + "\n"
                             f_out.write(line)
                             write = True
 
@@ -1671,9 +1688,10 @@ def is_it_charging(Scenario_path,current_date):
                     battery_flat(vehicle, current_lat, current_lon, current_date, current_minute)
                     output_file_temp = os.path.join(output_dir, vehicle + ".csv")
                     current_battery_status = get_battery_status(vehicle)
+                    battery_soc_percentage = get_battery_soc(vehicle)
 
                     with open(output_file_temp, 'a') as f_out:
-                        line = "{},{},{},{},{},{},{},{},0,{},".format(current_minute,current_lat,current_lon,current_alt,current_speed,displacement,energy_offtake,stadionary_time_at_charger,current_battery_status) + "\n"
+                        line = "{},{},{},{},{},{},{},{},0,{},".format(current_minute,current_lat,current_lon,current_alt,current_speed,displacement,energy_offtake,stadionary_time_at_charger,battery_soc_percentage) + "\n"
                         f_out.write(line)
                         write = True
 
@@ -1689,9 +1707,10 @@ def is_it_charging(Scenario_path,current_date):
                 battery_flat(vehicle, current_lat, current_lon, current_date, current_minute)
                 output_file_temp = os.path.join(output_dir, vehicle + ".csv")
                 current_battery_status = get_battery_status(vehicle)
+                battery_soc_percentage = get_battery_soc(vehicle)
 
                 with open(output_file_temp, 'a') as f_out:
-                    line = "{},{},{},{},{},{},{},{},0,{},".format(current_minute,current_lat,current_lon,current_alt,current_speed,displacement,energy_offtake,stadionary_time_at_charger,current_battery_status) + "\n"
+                    line = "{},{},{},{},{},{},{},{},0,{},".format(current_minute,current_lat,current_lon,current_alt,current_speed,displacement,energy_offtake,stadionary_time_at_charger,battery_soc_percentage) + "\n"
                     f_out.write(line)
                     write = True
 
@@ -1772,6 +1791,7 @@ def charging_stations_to_vehicles(Scenario_path,current_date):
     path = Scenario_path+'\\'+'Output'+'\\'+'Charging_Stations_to_Vehicle'
     os.chdir(path)
     os.makedirs(current_date) 
+    global charging_efficiency
 
     charging_output_dir = Scenario_path+'\\'+'Output'+'\\'+'Charging_Stations_to_Vehicle'+'\\' + current_date
     #Create output files for charging stations
@@ -1815,8 +1835,9 @@ def charging_stations_to_vehicles(Scenario_path,current_date):
         for station in ChargingStationsObj: 
             output_file = os.path.join(charging_output_dir, station.name + ".csv")
             chargers_active = get_chargers_active(station.name)
-            power = chargers_active * (get_charging_power(station.name))
+            #power = chargers_active * (get_charging_power(station.name))
             energy_delivered_now = get_energy_delivered(station.name)
+            power = energy_delivered_now*60
             energy_delivered_daily = float(get_daily_energy_delivered(station.name))
             with open(output_file, 'a') as f:
                 line = "{},{},{},{},{}".format(minute,chargers_active,power,energy_delivered_now,energy_delivered_daily)
@@ -1844,6 +1865,9 @@ def load_profiles(charging_output_dir):
             df = pd.read_csv(csv_path)
             
             # Plot the power delivered vs time
+            plt.xticks(np.arange(0, 1440, 60))
+            plt.xticks(rotation=90)
+            plt.gca().set_xticklabels([f'{i:02}:00' for i in range(24)])
             plt.plot(df['Time [min]'], df['Power Delivery [kW]'], linewidth=1)
             plt.xlabel('Time [min]')
             plt.ylabel('Power Delivery [kW]')
@@ -1874,6 +1898,9 @@ def energy_profiles(charging_output_dir):
             df = pd.read_csv(csv_path)
             
             # Plot the power delivered vs time
+            plt.xticks(np.arange(0, 1440, 60))
+            plt.xticks(rotation=90)
+            plt.gca().set_xticklabels([f'{i:02}:00' for i in range(24)])
             plt.plot(df['Time [min]'], df['Cumulative Daily Energy [kWh]'])
             plt.xlabel('Time [min]')
             plt.ylabel('Cumulative Daily Energy [kWh]')
@@ -1914,7 +1941,7 @@ def plot_average_power_vs_time(charging_output_dir):
             
             # Pad the array with NaNs if it's length is less than 1440 (24 hours x 60 minutes)
             if len(power) < 1440:
-                power = np.pad(power, (0, 1440-len(power)), 'constant', constant_values=(np.nan, np.nan))
+                power = np.pad(power, (0, 1440-len(power)), 'constant', constant_values=(0, 0))
             
             # Add the power values to the cumulative power dictionary
             if csv_file in charging_stations:
@@ -1930,7 +1957,10 @@ def plot_average_power_vs_time(charging_output_dir):
         
         # Plot the average power versus time
         plt.plot(average_power, label=charging_station[:-4])
-        
+    
+    plt.xticks(np.arange(0, 1440, 60))
+    plt.xticks(rotation=90)
+    plt.gca().set_xticklabels([f'{i:02}:00' for i in range(24)])
     plt.xlabel('Time [min]')
     plt.ylabel('Power [kW]')
     plt.title("Average Power versus Time for All Charging Stations")
@@ -1986,7 +2016,10 @@ def plot_average_energy_vs_time(charging_output_dir):
         
         # Plot the average power versus time
         plt.plot(average_power, label=charging_station[:-4])
-        
+    
+    plt.xticks(np.arange(0, 1440, 60))
+    plt.xticks(rotation=90)
+    plt.gca().set_xticklabels([f'{i:02}:00' for i in range(24)])
     plt.xlabel('Time [min]')
     plt.ylabel('Cumulative Daily Energy [kWh]')
     plt.title("Average Energy versus Time for All Charging Stations")
@@ -2272,7 +2305,7 @@ def define_charging_origin(Scenario_path):
 
                             #increase battery capacity
 
-                            space_available = battery_capacity - get_battery_soc_by_name(name)
+                            space_available = battery_capacity - get_battery_soc_by_name(external_battery_name)
 
                             if solar_energy_available < space_available:
                                 #Enough battery space to dump the full solar charge
@@ -2372,7 +2405,11 @@ def plot_average_power_vs_time_for_battery(charging_output_dir):
         
         # Plot the average power versus time
         plt.plot(average_power, label=charging_station[:-4])
-        
+    
+    plt.xticks(np.arange(0, 1440, 60))
+    plt.xticks(rotation=90)
+    plt.gca().set_xticklabels([f'{i:02}:00' for i in range(24)])
+
     plt.xlabel('Time [min]')
     plt.ylabel('Power [kW]')
     plt.title("Average Power versus Time for All Batteries In Charging Stations")
@@ -2430,6 +2467,10 @@ def plot_average_energy_vs_time_for_battery(charging_output_dir):
         
         # Plot the average power versus time
         plt.plot(average_power, label=charging_station[:-4])
+
+    plt.xticks(np.arange(0, 1440, 60))
+    plt.xticks(rotation=90)
+    plt.gca().set_xticklabels([f'{i:02}:00' for i in range(24)])
         
     plt.xlabel('Time [min]')
     plt.ylabel('Cumulative Daily Energy [kWh]')
@@ -2444,6 +2485,24 @@ def plot_average_energy_vs_time_for_battery(charging_output_dir):
     plt.clf()
 
 
+def delete_weekend_dirs(directory):
+    # Get the list of directories in the specified directory
+    dirs = os.listdir(directory)
+
+    # Loop over each directory and check if it corresponds to a weekend day
+    for dir in dirs:
+        try:
+            # Convert the directory name to a datetime object
+            date_obj = dt.strptime(dir, '%Y-%m-%d')
+
+            # Check if the date corresponds to a weekend day (Saturday or Sunday)
+            if date_obj.weekday() in [5, 6]:
+                # Delete the directory and all of its contents
+                dir_path = os.path.join(directory, dir)
+                shutil.rmtree(dir_path)
+        except ValueError:
+            # Ignore directories with names that are not dates
+            pass
 
 
 
@@ -2455,27 +2514,22 @@ def plot_average_energy_vs_time_for_battery(charging_output_dir):
 
 def run(Scenario_path):
 
-    
-
-    
-
+    global external_battery
     global delete_folders
     offtake_power(Scenario_path)
     folder_path = Scenario_path + '\\' + 'Output' + '\\' + '24h_Extrapolated_Data'
     if delete_folders == True:
         shutil.rmtree(folder_path)
-
+    
+    
     temp_path = Scenario_path+'\\'+'Input'+'\\'+'External_Batteries'
     isExist = os.path.exists(temp_path)
     if isExist==True:
         external_battery = True
 
+    
     if external_battery:
         add_solar_to_battery(Scenario_path)
-
-    
-
-    
 
     #Craete objects for all the charging stations
     charging_station_DF(Scenario_path)
@@ -2516,20 +2570,32 @@ def run(Scenario_path):
     if external_battery:
         combine_solar_and_demand(Scenario_path)
         define_charging_origin(Scenario_path)
-    
-    
 
+    
     charging_station_ouput = Scenario_path+'\\'+'Output'+'\\'+'Charging_Stations_to_Vehicle'
     load_profiles(charging_station_ouput)
     energy_profiles(charging_station_ouput)
+    
+    if weekend_results_only:
+        delete_weekend_dirs(charging_station_ouput)
 
-    plot_average_power_vs_time(charging_station_ouput)
-    plot_average_energy_vs_time(charging_station_ouput)
+    plot_average_power_vs_time(charging_station_ouput) #Change
+    plot_average_energy_vs_time(charging_station_ouput) #Change
 
-    define_charging_origin(Scenario_path)
-    battery_ouput = Scenario_path+'\\'+'Output'+'\\'+'Charging_Summary'
-    plot_average_power_vs_time_for_battery(battery_ouput)
-    plot_average_energy_vs_time_for_battery(battery_ouput)
+    if external_battery:
+        battery_ouput = Scenario_path+'\\'+'Output'+'\\'+'Charging_Summary'
+        if weekend_results_only:
+            delete_weekend_dirs(battery_ouput)
+        plot_average_power_vs_time_for_battery(battery_ouput) 
+        plot_average_energy_vs_time_for_battery(battery_ouput)
+
+    
+    
+    
+
+    
+    
+    
 
 
     
