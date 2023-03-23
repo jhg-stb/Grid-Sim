@@ -33,7 +33,7 @@ todays_mobility_data = {}
 VehiclesDF = {}
 ChargingStationsDF = {}
 charging_efficiency = 0.9
-external_battery_grid_charging_threshold = 0.35
+external_battery_grid_charging_threshold = 0.9
 external_battery_discharging_threshold = 0.2
 stationary_time_threshold = 5
 
@@ -591,7 +591,7 @@ def downsample_input_data(Scenario_path):
                 for row in csvreader:
 
                     time = row['Time']
-                    current_minute = float(time[(len(time)-4)])
+                    current_minute = float(time[(len(time)-7)]+time[(len(time)-5)]+time[(len(time)-4)])
 
                     if current_minute == previous_minute:
                         continue
@@ -1078,7 +1078,7 @@ def extrapolate_solar_information(Scenario_path):
                         input_minute = float(row[1])
                         power = float(row[2])
 
-                        for i in range(0,29):
+                        for i in range(0,30):
                             current_minute = input_minute + i
 
                             line = "{},{}".format(current_minute,power) +'\n'
@@ -1865,9 +1865,9 @@ def load_profiles(charging_output_dir):
             df = pd.read_csv(csv_path)
             
             # Plot the power delivered vs time
-            plt.xticks(np.arange(0, 1440, 60))
+            plt.xticks(np.arange(0, 1441, 60))
             plt.xticks(rotation=90)
-            plt.gca().set_xticklabels([f'{i:02}:00' for i in range(24)])
+            plt.gca().set_xticklabels([f'{i:02}:00' for i in range(25)])
             plt.plot(df['Time [min]'], df['Power Delivery [kW]'], linewidth=1)
             plt.xlabel('Time [min]')
             plt.ylabel('Power Delivery [kW]')
@@ -1898,9 +1898,9 @@ def energy_profiles(charging_output_dir):
             df = pd.read_csv(csv_path)
             
             # Plot the power delivered vs time
-            plt.xticks(np.arange(0, 1440, 60))
+            plt.xticks(np.arange(0, 1441, 60))
             plt.xticks(rotation=90)
-            plt.gca().set_xticklabels([f'{i:02}:00' for i in range(24)])
+            plt.gca().set_xticklabels([f'{i:02}:00' for i in range(25)])
             plt.plot(df['Time [min]'], df['Cumulative Daily Energy [kWh]'])
             plt.xlabel('Time [min]')
             plt.ylabel('Cumulative Daily Energy [kWh]')
@@ -1957,13 +1957,20 @@ def plot_average_power_vs_time(charging_output_dir):
         
         # Plot the average power versus time
         plt.plot(average_power, label=charging_station[:-4])
+
+        # Create a pandas DataFrame to store the average power values
+        df = pd.DataFrame({'Time [min]': np.arange(0, 1440), 'Power [kW]': average_power})
+
+        # Write the DataFrame to a CSV file
+        csv_path = os.path.join(charging_output_dir, charging_station[:-4] + '.csv')
+        df.to_csv(csv_path, index=False)
     
-    plt.xticks(np.arange(0, 1440, 60))
+    plt.xticks(np.arange(0, 1441, 60))
     plt.xticks(rotation=90)
-    plt.gca().set_xticklabels([f'{i:02}:00' for i in range(24)])
+    plt.gca().set_xticklabels([f'{i:02}:00' for i in range(25)])
+    plt.ylim([0, 1250])
     plt.xlabel('Time [min]')
     plt.ylabel('Power [kW]')
-    plt.title("Average Power versus Time for All Charging Stations")
     plt.legend()
     
     # Save the plot as PNG file
@@ -2016,13 +2023,20 @@ def plot_average_energy_vs_time(charging_output_dir):
         
         # Plot the average power versus time
         plt.plot(average_power, label=charging_station[:-4])
+
+        # Save the average power values and timestamps to a CSV file
+        timestamps = pd.date_range(start='00:00', end='23:59', freq='1min')
+        df = pd.DataFrame({'Timestamp': timestamps, 'Cumulative Daily Energy [kWh]': average_power})
+        csv_filename = charging_station[:-4] + '_average_energy.csv'
+        csv_path = os.path.join(charging_output_dir, csv_filename)
+        df.to_csv(csv_path, index=False)
     
-    plt.xticks(np.arange(0, 1440, 60))
+    plt.xticks(np.arange(0, 1441, 60))
     plt.xticks(rotation=90)
-    plt.gca().set_xticklabels([f'{i:02}:00' for i in range(24)])
+    plt.gca().set_xticklabels([f'{i:02}:00' for i in range(25)])
+    plt.ylim([0, 10500])
     plt.xlabel('Time [min]')
     plt.ylabel('Cumulative Daily Energy [kWh]')
-    plt.title("Average Energy versus Time for All Charging Stations")
     plt.legend()
     
     # Save the plot as PNG file
@@ -2033,7 +2047,7 @@ def plot_average_energy_vs_time(charging_output_dir):
     plt.clf()
 
 def add_solar_to_battery(Scenario_path):
-    active_dates_directory = os.path.join(Scenario_path, 'Output', 'Power_Offtake_Added')
+    active_dates_directory = os.path.join(Scenario_path, 'Output', 'Charging_Stations_to_Vehicle')
     active_dates_list = [f for f in os.listdir(active_dates_directory) if os.path.isdir(os.path.join(active_dates_directory, f))]
 
     external_batteries_path = os.path.join(Scenario_path, 'Output', 'External_Batteries')
@@ -2322,29 +2336,30 @@ def define_charging_origin(Scenario_path):
                             battery_charged = battery_charged + charged_from_solar
                             space_available = battery_capacity - get_battery_soc_by_name(name)
 
-                            if battery_soc_in_percentage > external_battery_grid_charging_threshold:
+                            additional_charge_required = 0
+                            #if battery_soc_in_percentage > external_battery_grid_charging_threshold:
                                 #No additional space for grid charging, solar filled up the battery
-                                additional_charge_required = 0
-                            else:
+                                #additional_charge_required = 0
+                            #else:
                                 #Additional space for grid charging
-                                if solar_energy_available < charge_input/60:
+                                #if solar_energy_available < charge_input/60:
                                     #Solar is not enough for input charging speed. Add additional charge from the grid
-                                    additional_charge_required = charge_input/60 - solar_energy_available
+                                    #additional_charge_required = charge_input/60 - solar_energy_available
 
-                                    if additional_charge_required < space_available:
+                                    #if additional_charge_required < space_available:
                                         #Enough battery space to dump the full additional grid charge
-                                        battery_soc_in_percentage = (get_battery_soc_by_name(external_battery_name)/battery_capacity)
-                                        if battery_soc_in_percentage < 0.85:
-                                            additional_charge_required = additional_charge_required*charging_efficiency
-                                        else:
-                                            additional_charge_required = additional_charge_required*charging_efficiency*(1-math.exp(((battery_soc_in_percentage*100)-85)/4)/120)
-                                        increase_battery_soc(external_battery_name, additional_charge_required)
-                                    else:
+                                        #battery_soc_in_percentage = (get_battery_soc_by_name(external_battery_name)/battery_capacity)
+                                        #if battery_soc_in_percentage < 0.85:
+                                            #additional_charge_required = additional_charge_required*charging_efficiency
+                                        #else:
+                                            #additional_charge_required = additional_charge_required*charging_efficiency*(1-math.exp(((battery_soc_in_percentage*100)-85)/4)/120)
+                                        #increase_battery_soc(external_battery_name, additional_charge_required)
+                                    #else:
                                         #Additional charge from grid is limited by the space left in the battery
-                                        additional_charge_required = space_available
-                                        increase_battery_soc(external_battery_name, additional_charge_required)
-                                else:
-                                    additional_charge_required = 0
+                                        #additional_charge_required = space_available
+                                        #increase_battery_soc(external_battery_name, additional_charge_required)
+                                #else:
+                                    #additional_charge_required = 0
 
                             battery_charged = battery_charged + additional_charge_required
                             
@@ -2388,6 +2403,7 @@ def plot_average_power_vs_time_for_battery(charging_output_dir):
             power = df['Total Grid Impact [kW]'].values
             
             # Pad the array with NaNs if it's length is less than 1440 (24 hours x 60 minutes)
+            length = len(power)
             if len(power) < 1440:
                 power = np.pad(power, (0, 1440-len(power)), 'constant', constant_values=(np.nan, np.nan))
             
@@ -2396,6 +2412,8 @@ def plot_average_power_vs_time_for_battery(charging_output_dir):
                 charging_stations[csv_file] = np.vstack((charging_stations[csv_file], power))
             else:
                 charging_stations[csv_file] = np.array([power])
+
+            
     
     # Plot the average power versus time for each charging station
     print('\nGenerating average power delivery for all charging stations:')
@@ -2405,14 +2423,21 @@ def plot_average_power_vs_time_for_battery(charging_output_dir):
         
         # Plot the average power versus time
         plt.plot(average_power, label=charging_station[:-4])
+
+        # Create a pandas DataFrame to store the average power values
+        df = pd.DataFrame({'Time [min]': np.arange(0, 1440), 'Power [kW]': average_power})
+
+        # Write the DataFrame to a CSV file
+        csv_path = os.path.join(charging_output_dir, charging_station[:-4] + '.csv')
+        df.to_csv(csv_path, index=False)
     
-    plt.xticks(np.arange(0, 1440, 60))
+    plt.xticks(np.arange(0, 1441, 60))
     plt.xticks(rotation=90)
-    plt.gca().set_xticklabels([f'{i:02}:00' for i in range(24)])
+    plt.ylim([0, 1250])
+    plt.gca().set_xticklabels([f'{i:02}:00' for i in range(25)])
 
     plt.xlabel('Time [min]')
     plt.ylabel('Power [kW]')
-    plt.title("Average Power versus Time for All Batteries In Charging Stations")
     plt.legend()
     
     # Save the plot as PNG file
@@ -2452,6 +2477,7 @@ def plot_average_energy_vs_time_for_battery(charging_output_dir):
             # Pad the array with NaNs if it's length is less than 1440 (24 hours x 60 minutes)
             if len(power) < 1440:
                 power = np.pad(power, (0, 1440-len(power)), 'constant', constant_values=(np.nan, np.nan))
+                
             
             # Add the power values to the cumulative power dictionary
             if csv_file in charging_stations:
@@ -2468,13 +2494,20 @@ def plot_average_energy_vs_time_for_battery(charging_output_dir):
         # Plot the average power versus time
         plt.plot(average_power, label=charging_station[:-4])
 
-    plt.xticks(np.arange(0, 1440, 60))
+        # Save the average power values and timestamps to a CSV file
+        timestamps = pd.date_range(start='00:00', end='23:59', freq='1min')
+        df = pd.DataFrame({'Timestamp': timestamps, 'Cumulative Daily Energy [kWh]': average_power})
+        csv_filename = charging_station[:-4] + '_average_energy.csv'
+        csv_path = os.path.join(charging_output_dir, csv_filename)
+        df.to_csv(csv_path, index=False)
+
+    plt.xticks(np.arange(0, 1441, 60))
     plt.xticks(rotation=90)
-    plt.gca().set_xticklabels([f'{i:02}:00' for i in range(24)])
+    plt.gca().set_xticklabels([f'{i:02}:00' for i in range(25)])
+    plt.ylim([0, 10500])
         
     plt.xlabel('Time [min]')
     plt.ylabel('Cumulative Daily Energy [kWh]')
-    plt.title("Average Energy versus Time for All Charging Stations")
     plt.legend()
     
     # Save the plot as PNG file
@@ -2506,13 +2539,81 @@ def delete_weekend_dirs(directory):
 
 
 
+def plot_average_soc_for_battery(charging_output_dir):
+    # Get the list of all day directories
+    day_dirs = [day_dir for day_dir in os.listdir(charging_output_dir) if os.path.isdir(os.path.join(charging_output_dir, day_dir))]
+    
+    # Create a dictionary to store the cumulative power for each charging station
+    charging_stations = {}
+    
+    # Loop through each day directory
+    for day_dir in day_dirs:
+        day_path = os.path.join(charging_output_dir, day_dir)
+        
+        # Loop through each charging station's CSV file
+        for csv_file in os.listdir(day_path):
+            # Check if the file is a CSV file
+            if not csv_file.endswith('.csv'):
+                continue
+            
+            csv_path = os.path.join(day_path, csv_file)
+            
+            # Load CSV data into a pandas dataframe
+            df = pd.read_csv(csv_path)
+            
+            # Get the power column from the dataframe
+            power = df['Battery State of Charge [%]'].values
+            
+            # Pad the array with NaNs if it's length is less than 1440 (24 hours x 60 minutes)
+            if len(power) < 1440:
+                power = np.pad(power, (0, 1440-len(power)), 'constant', constant_values=(np.nan, np.nan))
+            
+            # Add the power values to the cumulative power dictionary
+            if csv_file in charging_stations:
+                charging_stations[csv_file] = np.vstack((charging_stations[csv_file], power))
+            else:
+                charging_stations[csv_file] = np.array([power])
+    
+    # Plot the average power versus time for each charging station
+    print('\nGenerating average state of charge for each external battery:')
+    for charging_station, power_values in tqdm(charging_stations.items()):
+        # Calculate the average power for each minute of the day
+        average_power = np.nanmean(power_values, axis=0)
+        
+        # Plot the average power versus time
+        plt.plot(average_power, label=charging_station[:-4])
+        # Write the power values to a CSV file
+        csv_path = os.path.join(charging_output_dir, charging_station[:-4] + '_SoC.csv')
+        with open(csv_path, 'w', newline='') as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerow(['Time [h]', 'Battery State of Charge [%]'])
+            for i in range(1440):
+                writer.writerow([i/60, average_power[i]])
 
+    plt.plot([0, 1440], [20, 20], '--', color='black')
+    plt.ylim([0, 100])
+    plt.xticks(np.arange(0, 1441, 60))
+    plt.xticks(rotation=90)
+    plt.gca().set_xticklabels([f'{i:02}:00' for i in range(25)])
 
+    plt.xlabel('Time [h]')
+    plt.ylabel('Battery State of Charge [%]')
+    plt.legend()
+    plt.legend(loc='lower right')
+    
+    # Save the plot as PNG file
+    plot_path = os.path.join(charging_output_dir, "Average_SoC_versus_Time" + '.png')
+    plt.savefig(plot_path)
+    
+    # Clear the plot for next iteration
+    plt.clf()
 
     
 
 
 def run(Scenario_path):
+
+    
 
     global external_battery
     global delete_folders
@@ -2586,6 +2687,7 @@ def run(Scenario_path):
         battery_ouput = Scenario_path+'\\'+'Output'+'\\'+'Charging_Summary'
         if weekend_results_only:
             delete_weekend_dirs(battery_ouput)
+        plot_average_soc_for_battery(battery_ouput)
         plot_average_power_vs_time_for_battery(battery_ouput) 
         plot_average_energy_vs_time_for_battery(battery_ouput)
 
