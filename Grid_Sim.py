@@ -26,14 +26,14 @@ warnings.filterwarnings("ignore", category=RuntimeWarning)
 #Radius of charging station inaccurary
 charging_radius = 10
 Batterty_Flat = False
-delete_folders = False
+delete_folders = True
 initialise_done = False
 prep_done = False
 todays_mobility_data = {}
 VehiclesDF = {}
 ChargingStationsDF = {}
 charging_efficiency = 0.9
-external_battery_grid_charging_threshold = 0.9
+external_battery_grid_charging_threshold = 0.85
 external_battery_discharging_threshold = 0.2
 stationary_time_threshold = 5
 
@@ -171,11 +171,12 @@ def initialise_vehicles(Scenario_path):
 
         
         #Establish if the user wants to use a standard kWh/km, or is going to input energy usage information
-        changing_efficiency = input('\nDo you want to use a constant kWh/km efficiency rate, or input energy usage as part of mobility data?\n1. Constant kWh/km \n2. Mobility Data kWh/km \n')
-        while not (changing_efficiency=='1' or changing_efficiency=='2'):
-            changing_efficiency = input('\nInvalid option. Please enter a valid option: ')
+        #changing_efficiency = input('\nDo you want to use a constant kWh/km efficiency rate, or input energy usage as part of mobility data?\n1. Constant kWh/km \n2. Mobility Data kWh/km \n')
+        #while not (changing_efficiency=='1' or changing_efficiency=='2'):
+        #    changing_efficiency = input('\nInvalid option. Please enter a valid option: ')
 
 
+        changing_efficiency = '1'
         #Constant kWh/km selected
         if changing_efficiency == '1':
             #Establish if each vehicle has a unique efficiency
@@ -304,7 +305,7 @@ def initialise_external_battery(Scenario_path):
     #selection = input('\nDoes all the charging stations have an external battery?\n1. Yes\n2. No\n')
     #while not (selection=='1' or selection=='2'):
         #selection = input('\nInvalid option. Please enter a valid option: ')
-    selection = 1
+    selection = '1'
     all_charging_stations_battery = selection
 
 
@@ -648,7 +649,6 @@ def seperate_daily_mobility_data(Scenario_path):
                 day = date[5]+date[6]+date[8]+date[9]
 
                 #Check first if it is a new date
-
                 if day != previous_day: #New day
 
                     
@@ -700,8 +700,8 @@ def seperate_daily_mobility_data(Scenario_path):
 
 def fill_missing_minutes(Scenario_path):
     dir_seperated_daily_FOLDERS = Scenario_path + '\\' + 'Output' + '\\' + 'Daily_Seperated_Downsampled_Mobility_Data'
-
     global distance_included
+
     #Create new folder for filled minutes data
     path = Scenario_path+'\\'+'Output'
     os.chdir(path)
@@ -804,6 +804,7 @@ def extrapolate_24hours(Scenario_path):
     
     dir_filled_seperated_daily_FOLDERS = Scenario_path + '\\' + 'Output' + '\\' + 'Filled_Minutes_Mobility_Data'
     global distance_included
+
     #Create new folder for extrapolated data
     path = Scenario_path+'\\'+'Output'
     os.chdir(path)
@@ -1460,9 +1461,7 @@ def is_it_charging(Scenario_path,current_date):
 
     
     global charging_efficiency
-
     output_dir = Scenario_path+'\\'+'Output'+'\\'+'Battery_Level_Added'+'\\'+current_date
-
     header_row = "Minute of Day,Latitude,Longitude,Altitude,Speed,Displacement [m],Energy Used [kWh],Stationary Charging Oppurtinuty Time at Charging Station [min],Battery Charged [kWh],Battery Level [%],Where I'm Charging"
 
     #Directory of power offtake folders
@@ -1515,7 +1514,7 @@ def is_it_charging(Scenario_path,current_date):
 
                 
 
-            #ADD CHECK TO SEE IF BATTERY IS FULL
+            #CHECK TO SEE IF BATTERY IS FULL
             is_battery_fulll = is_battery_full(vehicle)
 
             if is_battery_fulll == False:  #Battery is not full and recharging can by explored
@@ -1549,16 +1548,12 @@ def is_it_charging(Scenario_path,current_date):
                             if same_charging_point == False and where_charging != 'N/A':
                                 reset_stationary_time_at_charger(vehicle)
 
-                            
-
-
 
                             #Add counter for how long this condition is true; only if condition >5, start charging
                             stadionary_time_at_charger = increase_and_get_stationary_time_at_station(vehicle)
                             
-                            if same_charging_point == True:   #Vehicle is already charging at this station
-                                
-                                
+                            if same_charging_point == True:   #Vehicle was already charging at this station in the previous sample
+                                                                
                                 #!!!!!!!!!!CHARGING!!!!!!!!!!
 
                                 output_file_temp = os.path.join(output_dir, vehicle + ".csv")
@@ -1569,11 +1564,11 @@ def is_it_charging(Scenario_path,current_date):
                                     charging_power_actual = charging_power_available * charging_efficiency
                                 else:
                                     charging_power_actual = charging_power_available*(1-math.exp(((battery_soc*100)-85)/4)/120)*charging_efficiency
-                                temp_vehicle_charged = float(charging_power_actual)/60       #kWh charged in this minute
+                                temp_vehicle_charged = float(charging_power_actual)/60       #kWh charged in this minute before seeing how much capacity is left
                                 
                                 decrease_battery_status(vehicle,energy_offtake)
                                 battery_flat(vehicle, current_lat, current_lon, current_date, current_minute)
-                                vehicle_charged = increase_battery_status(vehicle,temp_vehicle_charged)
+                                vehicle_charged = increase_battery_status(vehicle,temp_vehicle_charged) #kWh charged in this minute
                                 new_battery_status = float(get_battery_status(vehicle))
                                 where_charging = get_where_charging(vehicle)
                                 battery_soc_percentage = get_battery_soc(vehicle)
@@ -1602,11 +1597,11 @@ def is_it_charging(Scenario_path,current_date):
                                     charging_power_actual = charging_power_available*charging_efficiency
                                 else:
                                     charging_power_actual = charging_power_available*(1-math.exp(((battery_soc*100)-85)/4)/120)*charging_efficiency
-                                temp_vehicle_charged = float(charging_power_actual)/60       #kWh charged in this minute
+                                temp_vehicle_charged = float(charging_power_actual)/60       #kWh charged in this minute before seeing how much capacity is left
                                 
                                 decrease_battery_status(vehicle,energy_offtake)
                                 battery_flat(vehicle, current_lat, current_lon, current_date, current_minute)
-                                vehicle_charged = increase_battery_status(vehicle,temp_vehicle_charged)
+                                vehicle_charged = increase_battery_status(vehicle,temp_vehicle_charged) #kWh charged in this minute
                                 new_battery_status = float(get_battery_status(vehicle))
                                 battery_soc_percentage = get_battery_soc(vehicle)
                                 with open(output_file_temp, 'a') as f_out:
@@ -1635,8 +1630,6 @@ def is_it_charging(Scenario_path,current_date):
                             break
                         
 
-
-
                     if charging_found == False and write == False:    
                         #Vehicle is not close to a charging station so it can be concluded vehicle is definietly not charging. Add current battery level to dataframe and print
                         reset_stationary_time_at_charger(vehicle)
@@ -1656,10 +1649,6 @@ def is_it_charging(Scenario_path,current_date):
                             set_where_charging(vehicle, 'N/A')
                             increase_available_chargers(where_charging)
                             
-
-
-                        
-                        
 
                     elif available_charger == False and write == False:
                         #Vehicle is close to a charging station, but no charger is available so it can be concluded vehicle is definietly not charging. Add current battery level to dataframe and print
@@ -2337,6 +2326,8 @@ def define_charging_origin(Scenario_path):
                             space_available = battery_capacity - get_battery_soc_by_name(name)
 
                             additional_charge_required = 0
+
+                            #The code below allows the grid to charge the external battery, in addition to charging the vehicle
                             #if battery_soc_in_percentage > external_battery_grid_charging_threshold:
                                 #No additional space for grid charging, solar filled up the battery
                                 #additional_charge_required = 0
@@ -2613,8 +2604,6 @@ def plot_average_soc_for_battery(charging_output_dir):
 
 def run(Scenario_path):
 
-    
-
     global external_battery
     global delete_folders
     offtake_power(Scenario_path)
@@ -2690,24 +2679,6 @@ def run(Scenario_path):
         plot_average_soc_for_battery(battery_ouput)
         plot_average_power_vs_time_for_battery(battery_ouput) 
         plot_average_energy_vs_time_for_battery(battery_ouput)
-
-    
-    
-    
-
-    
-    
-    
-
-
-    
-
-    
-
-
-
-
-
 
 
 def main(scenario_dir: Path):
