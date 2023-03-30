@@ -1097,8 +1097,8 @@ def prepare_mobility_files(Scenario_path):
         format_solar_information(Scenario_path)
         seperate_solar_information(Scenario_path)
         global delete_folders
-        if delete_folders == True:
-            delete_solar_files(Scenario_path)
+        #if delete_folders == True:
+            #delete_solar_files(Scenario_path)
         extrapolate_solar_information(Scenario_path)
     
     #Start by downsampling input data to minutely data (remove all second data)
@@ -2036,7 +2036,7 @@ def plot_average_energy_vs_time(charging_output_dir):
     plt.clf()
 
 def add_solar_to_battery(Scenario_path):
-    active_dates_directory = os.path.join(Scenario_path, 'Output', 'Charging_Stations_to_Vehicle')
+    active_dates_directory = os.path.join(Scenario_path, 'Output', 'Power_Offtake_Added')
     active_dates_list = [f for f in os.listdir(active_dates_directory) if os.path.isdir(os.path.join(active_dates_directory, f))]
 
     external_batteries_path = os.path.join(Scenario_path, 'Output', 'External_Batteries')
