@@ -2,29 +2,32 @@
 
 ## Input File Format
 
-### Vehicles
-Mobility Data
-| Date       | Time     | Latitude   | Longitude  | Altitude  | Speed   | Distance* |
-|------------|----------|------------|------------|-----------|---------|----------|
-| yyy-mm-dd  | hh:mm:ss | [degrees]  | [degrees]  | [meters]  | [km/h]  | [meters] |
+### Vehicles Mobility Data
+The mobility data for vehicles should be provided in the following format:
 
-*Note: Distance is not compulsory. If you are not including Distance data, do not create this column in your input file.
+| Date         | Time     | Latitude        | Longitude     | Altitude | Speed   | Distance* |
+| -------------| ---------| --------------- | --------------| ---------| --------|--------|
+| yyyy-mm-dd   | hh:mm:ss | [degrees]       | [degrees]     | [meters] | [km/h]  | [meters] |
+
+*Note: *The Distance column is optional. If you are not including Distance, please do not create this column in your input file.*
 
 ### External Batteries
-The input format of the solar PV is exactly as it is given by SAM. Simply have the file in the correct directory and save it as `Solar_Information.csv`.
+The input format of the solar PV data should be exactly as given by SAM (System Advisor Model). To use this data, ensure the file is saved in the correct directory with the name "Solar_Information.csv."
+
+---
+
+The units and format of all other input parameters required are described in the input file, which is automatically generated when the scenario is initialized.
 
 ## Usage
 
-For examples of Grid-Sim usage or a more in-depth explanation of the software, see the papers written with this software below:
-1. [Link to Paper 1](https://doi.org/10.36227/techrxiv.23544567.v1)
-2. [Link to Paper 2](https://dx.doi.org/10.2139/ssrn.4497144)
+For examples of how to use Grid-Sim and a more in-depth explanation of the software, please refer to the papers written with this software available at the following links:
+
+1. [https://doi.org/10.36227/techrxiv.23544567.v1](https://doi.org/10.36227/techrxiv.23544567.v1)
+2. [https://dx.doi.org/10.2139/ssrn.4497144](https://dx.doi.org/10.2139/ssrn.4497144)
 
 ## Contact Information
 
-For more information about this software, feel free to contact me at:
-Email: jhgiliomee@sun.ac.za
-
-We are open to feedback and suggestions, and we would be glad to assist you with any questions related to Grid-Sim.
+For more information about this software or any inquiries, feel free to contact me at jhgiliomee@sun.ac.za. I am happy to assist and provide support with the usage and implementation of Grid-Sim.
 
 
 
