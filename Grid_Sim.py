@@ -15,32 +15,44 @@ import math
 import datetime
 from datetime import datetime as dt
 
+
+#The following variables can be altered by the user
+weekend_results_only = True
+delete_folders = False
+charging_station_radius = 10
+charging_efficiency = 1
+external_battery_grid_charging_threshold = 85
+external_battery_discharging_threshold = 20
+stationary_time_threshold = 1
+GPS_speed_noise_threshold = 2
+unusable_capacity = 20
+
+
+#The following variables must not be edited
 external_battery = False
 distance_included = False
-WorldBankData = True
-weekend_results_only = True
-
-# Ignore the mean of empty slice warning
-warnings.filterwarnings("ignore", category=RuntimeWarning)
-
-#Radius of charging station inaccurary
-charging_radius = 10
 Batterty_Flat = False
-delete_folders = True
 initialise_done = False
 prep_done = False
 todays_mobility_data = {}
 VehiclesDF = {}
 ChargingStationsDF = {}
-charging_efficiency = 0.9
-external_battery_grid_charging_threshold = 0.85
-external_battery_discharging_threshold = 0.2
-stationary_time_threshold = 5
-
 number_of_vehicles = 0
 same_battery_cap = 0
 standard_battery_capacity = 0
 
+# Ignore the mean of empty slice warning
+warnings.filterwarnings("ignore", category=RuntimeWarning)
+
+#Preset_Values
+SUV_battery = 60
+SUV_efficiency = 0.18
+Saloon_battery = 60
+Saloon_efficiency = 0.15
+Minibus_battery = 60
+Minibus_efficiency = 0.55
+Bus_battery = 125
+Bus_efficiency = 0.83
 
 class TempVehicleClass:
     def __init__(self, name, battery_capacity, efficiency):
@@ -113,16 +125,31 @@ def initialise_vehicles(Scenario_path):
     while selection.isnumeric() == False:
         selection = input('That is not a valid number. Please try again: ')
     selection = int(selection)+1
+    number_of_vehicles = selection
 
+    #Ask is preset vehicle parameters want to be used
+    selection = input('\nDo you want to use preset vehicle parameters?\n1. Yes\n2. No \n')
+    while not (selection=='1' or selection=='2'):
+        selection = input('That is not a valid option. Please try again: ')
 
-    #Establish if the user wants to input the vehicle parameters now or later
-    vehicle_input_option = input('\nDo you want to input vehicle parameters now or later in the input foler?\n1. Now \n2. Later In Folder \n')
-    while not (vehicle_input_option=='1' or vehicle_input_option=='2'):
-        vehicle_input_option = input('\nInvalid option. Please enter a valid option: ')
+    if selection == '1': #User wants preset vehicle parameters
+        vehicle_seection = input('\nPlease select a vehicle type:\n1. Saloon\n2. SUV\n3. Minibus\n4. Bus \n')
+        while not (vehicle_seection=='1' or vehicle_seection=='2' or vehicle_seection=='3' or vehicle_seection=='4'):
+            vehicle_seection = input('That is not a valid option. Please try again: ')
 
-
-    
-    if vehicle_input_option == '1':
+        #do vehicle selection things
+        if vehicle_seection == '1': #Saloon
+            eff = Saloon_efficiency
+            battery = Saloon_battery
+        elif vehicle_seection == '2': #SUV
+            eff = SUV_efficiency
+            battery = SUV_battery
+        elif vehicle_seection == '3': #Minibus
+            eff = Minibus_efficiency
+            battery = Minibus_battery
+        elif vehicle_seection == '4': #Bus
+            eff = Bus_efficiency
+            battery = Bus_battery
 
         #Ask if they want to name the vehicles
         vehicle_name_option = input('\nDo you want to name the vehicle(s)?\nNOTE: This can be done at a later stage by editing the folder name in <Input\Vehicles>\n1. Yes \n2. No\n')
@@ -131,95 +158,122 @@ def initialise_vehicles(Scenario_path):
 
 
         if vehicle_name_option=='1':
-            for i in range(1,selection):
+            for i in range(1,number_of_vehicles):
                 vehicle_name = input('\nPlease name vehicle #' +str(i)+': ')
                 TempVehicles.append(TempVehicleClass(vehicle_name,None, None))
 
         if vehicle_name_option=='2':
-            for i in range(1,selection):
+            for i in range(1,number_of_vehicles):
                 TempVehicles.append(TempVehicleClass('Vehicle_'+str(i),None, None))
 
         #CREATE FOLDERS WITH VEHICLE'S NAME
         for obj in TempVehicles:
             Newfolder = obj.name
             os.makedirs(Newfolder)
+            obj.efficiency = eff
+            obj.battery_capacity = battery
 
 
-        #Define if all vehicles has the same battery capacity
-        if selection != 2:
-            same_battery_cap = input('\nDoes all the vehicles have the same battery capcaity?\n1. Yes \n2. No \n')
-            while not (same_battery_cap=='1' or same_battery_cap=='2'):
-                same_battery_cap = input('\nInvalid option. Please enter a valid option: ')
-        else:
-            same_battery_cap = '1'
+    else:
 
-        #All vehicles has the same battery capacity
-        if same_battery_cap == '1':
-            standard_battery_capacity = input('\nPlease enter the battery capacity in [kWh].\nNOTE: Enter the total capacity. Usable capacity of 80% will be accounted for.\n')
-            for obj in TempVehicles:
-                obj.battery_capacity = standard_battery_capacity
+        #Establish if the user wants to input the vehicle parameters now or later
+        vehicle_input_option = input('\nDo you want to input vehicle parameters now or later in the input folder?\n1. Now \n2. Later In Folder \n')
+        while not (vehicle_input_option=='1' or vehicle_input_option=='2'):
+            vehicle_input_option = input('\nInvalid option. Please enter a valid option: ')
 
-            
-
-        #Each vehicle has a unique battery capacity
-        if same_battery_cap == '2':
-            print('\nPlease enter the individual battery capacity of each vehicle.')
-            for obj in TempVehicles:
-                individual_battery_cap = input('\n' + obj.name + ': ')
-                obj.battery_capacity = individual_battery_cap
-                
 
         
-        #Establish if the user wants to use a standard kWh/km, or is going to input energy usage information
-        #changing_efficiency = input('\nDo you want to use a constant kWh/km efficiency rate, or input energy usage as part of mobility data?\n1. Constant kWh/km \n2. Mobility Data kWh/km \n')
-        #while not (changing_efficiency=='1' or changing_efficiency=='2'):
-        #    changing_efficiency = input('\nInvalid option. Please enter a valid option: ')
+        if vehicle_input_option == '1':
+
+            #Ask if they want to name the vehicles
+            vehicle_name_option = input('\nDo you want to name the vehicle(s)?\nNOTE: This can be done at a later stage by editing the folder name in <Input\Vehicles>\n1. Yes \n2. No\n')
+            while not (vehicle_name_option=='1' or vehicle_name_option=='2'):
+                vehicle_name_option = input('\nInvalid option. Please enter a valid option: ')
 
 
-        changing_efficiency = '1'
-        #Constant kWh/km selected
-        if changing_efficiency == '1':
-            #Establish if each vehicle has a unique efficiency
-            if selection!=2:
-                unique_efficiency = input('\nDoes each vehicle have a unique efficiency?\n1. Yes \n2. No \n')
-                while not (unique_efficiency=='1' or unique_efficiency=='2'):
-                    unique_efficiency = input('\nInvalid option. Please enter a valid option: ')
-            else:
-                unique_efficiency = '2'
+            if vehicle_name_option=='1':
+                for i in range(1,selection):
+                    vehicle_name = input('\nPlease name vehicle #' +str(i)+': ')
+                    TempVehicles.append(TempVehicleClass(vehicle_name,None, None))
 
-            #Each vehicle has a unique efficiency
-            if unique_efficiency == '1':
-                print('\nPlease enter the individual energy efficiency [in kWh/km] of each vehicle.')
-                for obj in TempVehicles:
-                    individual_efficiency = input(obj.name+': ')
-                    obj.efficiency = float(individual_efficiency)
+            if vehicle_name_option=='2':
+                for i in range(1,selection):
+                    TempVehicles.append(TempVehicleClass('Vehicle_'+str(i),None, None))
 
-            #All vehicles has the same efficiency
-            if unique_efficiency == '2':
-                individual_efficiency = input('\nPlease enter the energy efficiency [in kWh/km]: ')
-                for obj in TempVehicles:
-                    obj.efficiency = float(individual_efficiency)
-
-
-        #Changing kWh/km selected
-        if changing_efficiency == '2':
+            #CREATE FOLDERS WITH VEHICLE'S NAME
             for obj in TempVehicles:
-                obj.efficiency = 'N/A'
-
-    if vehicle_input_option == '2':
-
-        #CREATE FOLDERS WITH VEHICLE'S NUMBERS
-        #Create a seperate folder for each vehicle
-        for i in range (1,selection):
-            Newfolder = 'Vehicle_'+str(i)
-            os.makedirs(Newfolder)
+                Newfolder = obj.name
+                os.makedirs(Newfolder)
 
 
-        for i in range(1,selection):
-            name = 'Vehicle_'+ str(i)
-            battery_capacity = ''
-            efficiency = ''
-            TempVehicles.append(TempVehicleClass(name,battery_capacity,efficiency))
+            #Define if all vehicles has the same battery capacity
+            if selection != 2:
+                same_battery_cap = input('\nDoes all the vehicles have the same battery capcaity?\n1. Yes \n2. No \n')
+                while not (same_battery_cap=='1' or same_battery_cap=='2'):
+                    same_battery_cap = input('\nInvalid option. Please enter a valid option: ')
+            else:
+                same_battery_cap = '1'
+
+            #All vehicles has the same battery capacity
+            if same_battery_cap == '1':
+                standard_battery_capacity = input('\nPlease enter the battery capacity in [kWh].\nNOTE: Enter the total capacity. Usable capacity of 80% will be accounted for.\n')
+                for obj in TempVehicles:
+                    obj.battery_capacity = standard_battery_capacity
+
+                
+
+            #Each vehicle has a unique battery capacity
+            if same_battery_cap == '2':
+                print('\nPlease enter the individual battery capacity of each vehicle.')
+                for obj in TempVehicles:
+                    individual_battery_cap = input('\n' + obj.name + ': ')
+                    obj.battery_capacity = individual_battery_cap
+
+
+            changing_efficiency = '1'
+            #Constant kWh/km selected
+            if changing_efficiency == '1':
+                #Establish if each vehicle has a unique efficiency
+                if selection!=2:
+                    unique_efficiency = input('\nDoes each vehicle have a unique efficiency?\n1. Yes \n2. No \n')
+                    while not (unique_efficiency=='1' or unique_efficiency=='2'):
+                        unique_efficiency = input('\nInvalid option. Please enter a valid option: ')
+                else:
+                    unique_efficiency = '2'
+
+                #Each vehicle has a unique efficiency
+                if unique_efficiency == '1':
+                    print('\nPlease enter the individual energy efficiency [in kWh/km] of each vehicle.')
+                    for obj in TempVehicles:
+                        individual_efficiency = input(obj.name+': ')
+                        obj.efficiency = float(individual_efficiency)
+
+                #All vehicles has the same efficiency
+                if unique_efficiency == '2':
+                    individual_efficiency = input('\nPlease enter the energy efficiency [in kWh/km]: ')
+                    for obj in TempVehicles:
+                        obj.efficiency = float(individual_efficiency)
+
+
+            #Changing kWh/km selected
+            if changing_efficiency == '2':
+                for obj in TempVehicles:
+                    obj.efficiency = 'N/A'
+
+        if vehicle_input_option == '2':
+
+            #CREATE FOLDERS WITH VEHICLE'S NUMBERS
+            #Create a seperate folder for each vehicle
+            for i in range (1,selection):
+                Newfolder = 'Vehicle_'+str(i)
+                os.makedirs(Newfolder)
+
+
+            for i in range(1,selection):
+                name = 'Vehicle_'+ str(i)
+                battery_capacity = ''
+                efficiency = ''
+                TempVehicles.append(TempVehicleClass(name,battery_capacity,efficiency))
 
 
 
@@ -444,7 +498,7 @@ def initialise(Scenario_path):
 
 
     
-    print('\nScenario folder succesfully created. Populate the Input folders accordingly.\nIMPORTANT: Ensure that the charging station name correlates with applicable external battery, if applicable.\nOnce populated, press ENTER, or rerun Grid-Sim and select option 1.')
+    print('\nScenario folder succesfully created. Populate the Input folders accordingly.\nIMPORTANT: Ensure that the charging station name correlates with related external battery, if applicable.\nOnce populated, press ENTER, or rerun Grid-Sim and select option 1.')
     enter = input()
 
 
@@ -576,6 +630,8 @@ def downsample_input_data(Scenario_path):
         global distance_included
         
         previous_minute = 'none'
+        previous_distance = 0
+
         with open(mobility_data_file, 'r') as f_in:
             csvreader = csv.DictReader(f_in)
 
@@ -595,6 +651,9 @@ def downsample_input_data(Scenario_path):
                     current_minute = float(time[(len(time)-7)]+time[(len(time)-5)]+time[(len(time)-4)])
 
                     if current_minute == previous_minute:
+                        if distance_included:
+                            distance = float(row['Distance'])
+                            previous_distance = previous_distance + distance
                         continue
 
                     
@@ -604,13 +663,14 @@ def downsample_input_data(Scenario_path):
                     alt = row['Altitude']
                     speed = int(row['Speed'])
                     if distance_included:
-                        distance = row['Distance']
+                        distance = float(row['Distance']) + previous_distance
 
-                    if speed <= 2:
+                    if speed <= GPS_speed_noise_threshold:
                         speed = 0
 
                     if distance_included:
                         line = "{},{},{},{},{},{},{}".format(date,time,lat,lon,alt,speed,distance) + "\n"
+                        previous_distance = 0
                     else:
                         line = "{},{},{},{},{},{}".format(date,time,lat,lon,alt,speed) + "\n"
                     f_out.write(line)
@@ -624,7 +684,7 @@ def seperate_daily_mobility_data(Scenario_path):
 
     path = Scenario_path+'\\'+'Output'
     os.chdir(path)
-    os.makedirs('Daily_Seperated_Downsampled_Mobility_Data')           
+    os.makedirs('Daily_Seperated_Data')           
             
     downsampled_mobility_data_files = [f for f in os.listdir(dir_downsampled_mobility_folderath) if f.endswith('.csv')]
     if distance_included:
@@ -654,15 +714,15 @@ def seperate_daily_mobility_data(Scenario_path):
                     
 
                     #Check if this date already has a folder due to other vehicles
-                    checking_date_folder = Scenario_path + '\\' + 'Output' + '\\' + 'Daily_Seperated_Downsampled_Mobility_Data' + '\\' + date
+                    checking_date_folder = Scenario_path + '\\' + 'Output' + '\\' + 'Daily_Seperated_Data' + '\\' + date
                     if not (os.path.exists(checking_date_folder)):
                         #Day folder does not exist, create a new one
-                        new_path = Scenario_path + '\\' + 'Output' + '\\' + 'Daily_Seperated_Downsampled_Mobility_Data'
+                        new_path = Scenario_path + '\\' + 'Output' + '\\' + 'Daily_Seperated_Data'
                         os.chdir(new_path)
                         os.makedirs(date)
                                     
                     #Create new .csv file dor the day's data in the already existing folder
-                    date_directory = Scenario_path + '\\' + 'Output' + '\\' + 'Daily_Seperated_Downsampled_Mobility_Data' + '\\' + date
+                    date_directory = Scenario_path + '\\' + 'Output' + '\\' + 'Daily_Seperated_Data' + '\\' + date
                     daily_seperated_downsampled = os.path.join(date_directory, downsampled_mobility_data_files[i])
 
                     with open(daily_seperated_downsampled, 'w') as f_out:
@@ -680,7 +740,7 @@ def seperate_daily_mobility_data(Scenario_path):
                         f_out.write(line)
 
                 else:
-                    date_directory = Scenario_path + '\\' + 'Output' + '\\' + 'Daily_Seperated_Downsampled_Mobility_Data' + '\\' + date
+                    date_directory = Scenario_path + '\\' + 'Output' + '\\' + 'Daily_Seperated_Data' + '\\' + date
                     daily_seperated_downsampled = os.path.join(date_directory, downsampled_mobility_data_files[i])
 
                     with open(daily_seperated_downsampled, 'a') as f_out:
@@ -699,7 +759,7 @@ def seperate_daily_mobility_data(Scenario_path):
                 previous_day = day
 
 def fill_missing_minutes(Scenario_path):
-    dir_seperated_daily_FOLDERS = Scenario_path + '\\' + 'Output' + '\\' + 'Daily_Seperated_Downsampled_Mobility_Data'
+    dir_seperated_daily_FOLDERS = Scenario_path + '\\' + 'Output' + '\\' + 'Daily_Seperated_Data'
     global distance_included
 
     #Create new folder for filled minutes data
@@ -718,7 +778,7 @@ def fill_missing_minutes(Scenario_path):
     for i in tqdm(range(0,len(dates_folders))):
 
         #Create a list of all the files within the date folder
-        dir_files = Scenario_path + '\\' + 'Output' + '\\' + 'Daily_Seperated_Downsampled_Mobility_Data' + '\\' + dates_folders[i]
+        dir_files = Scenario_path + '\\' + 'Output' + '\\' + 'Daily_Seperated_Data' + '\\' + dates_folders[i]
         seperated_mobility_data_files = [f for f in os.listdir(dir_files) if f.endswith('.csv')]
 
         #Create this date's folder in the new directory for filled minutes folder
@@ -816,7 +876,6 @@ def extrapolate_24hours(Scenario_path):
 
     #Output folder directory
     dir_extrapolated_data = Scenario_path + '\\' + 'Output' + '\\' + '24h_Extrapolated_Data'
-    global WorldBankData
 
     print('\nExtrapolating data over 24hours for each date:')
     for i in tqdm(range(0,len(dates_folders))):
@@ -867,10 +926,7 @@ def extrapolate_24hours(Scenario_path):
                             speed = '0'
                             if distance_included:
                                 distance = '0'
-                                if WorldBankData:
-                                    lat = 0
-                                    lon = 0
-                                    line = "{},{},{},{},{},{},{}".format(date,day_minute_counter,lat,lon,alt,speed,distance)+ "\n"
+                                line = "{},{},{},{},{},{},{}".format(date,day_minute_counter,lat,lon,alt,speed,distance)+ "\n"
                             else:    
                                 line = "{},{},{},{},{},{}".format(date,day_minute_counter,lat,lon,alt,speed)+ "\n"
                             f_out.write(line)
@@ -1114,7 +1170,7 @@ def prepare_mobility_files(Scenario_path):
     #Fill in missing minutes within daily mobility data
     fill_missing_minutes(Scenario_path)
     #Delete seperated mobility data. No longer needed
-    folder_path = Scenario_path + '\\' + 'Output' + '\\' + 'Daily_Seperated_Downsampled_Mobility_Data'
+    folder_path = Scenario_path + '\\' + 'Output' + '\\' + 'Daily_Seperated_Data'
     if delete_folders == True:
         shutil.rmtree(folder_path)
 
@@ -1441,7 +1497,7 @@ def battery_flat(vehicle_name, current_lat, current_lon, current_date, minute_of
     global Batterty_Flat
     
     for vehicle in Vehicles:
-        if vehicle.name == vehicle_name and vehicle.battery_status <= 0.2*float(vehicle.battery_capacity):
+        if vehicle.name == vehicle_name and vehicle.battery_status <= (unusable_capacity/100)*float(vehicle.battery_capacity):
             Batterty_Flat = True
 
             hour = str(int(float(minute_of_day)/60))
@@ -1450,7 +1506,7 @@ def battery_flat(vehicle_name, current_lat, current_lon, current_date, minute_of
             minute = str(int(float(minute_of_day) % 60))
             if len(minute) == 1:
                 minute = '0' + minute[0]
-            print("\nThe simulation could not be completed. It was stopped on {} at {}:{}:00 as Vehicle {}'s battery reached 20% state of charge at ({},{}). Either increase battery size, or ensure charging prior to this timestamp.".format(current_date, hour,minute, vehicle_name, current_lat, current_lon))
+            print("\nThe simulation could not be completed. It was stopped on {} at {}:{}:00 as Vehicle {}'s battery reached {}% state of charge at ({},{}). \nEither increase battery size, or ensure charging prior to this timestamp.".format(current_date, hour,minute, vehicle_name, unusable_capacity, current_lat, current_lon))
             
 def is_it_charging(Scenario_path,current_date):
 
@@ -1523,10 +1579,10 @@ def is_it_charging(Scenario_path,current_date):
 
                     for i in range(len(ChargingStations)):
 
-                        upper_lat = float(ChargingStations[i][0]) + 0.0000450665*charging_radius
-                        lower_lat = float(ChargingStations[i][0]) - 0.0000450665*charging_radius
-                        upper_lon = float(ChargingStations[i][1]) + 0.0000569195*charging_radius
-                        lower_lon = float(ChargingStations[i][1]) - 0.0000569195*charging_radius
+                        upper_lat = float(ChargingStations[i][0]) + 0.0000450665*charging_station_radius
+                        lower_lat = float(ChargingStations[i][0]) - 0.0000450665*charging_station_radius
+                        upper_lon = float(ChargingStations[i][1]) + 0.0000569195*charging_station_radius
+                        lower_lon = float(ChargingStations[i][1]) - 0.0000569195*charging_station_radius
 
                         
 
@@ -1860,7 +1916,7 @@ def load_profiles(charging_output_dir):
             plt.plot(df['Time [min]'], df['Power Delivery [kW]'], linewidth=1)
             plt.xlabel('Time [min]')
             plt.ylabel('Power Delivery [kW]')
-            plt.ylim(0, 100)
+            #plt.ylim(0, 100)
             plt.title(csv_file[:-4])
             
             # Save the plot as PNG file
@@ -1893,7 +1949,7 @@ def energy_profiles(charging_output_dir):
             plt.plot(df['Time [min]'], df['Cumulative Daily Energy [kWh]'])
             plt.xlabel('Time [min]')
             plt.ylabel('Cumulative Daily Energy [kWh]')
-            plt.ylim(0, 300)
+            #plt.ylim(0, 300)
             plt.title(csv_file[:-4])
             
             # Save the plot as PNG file
@@ -1957,7 +2013,7 @@ def plot_average_power_vs_time(charging_output_dir):
     plt.xticks(np.arange(0, 1441, 60))
     plt.xticks(rotation=90)
     plt.gca().set_xticklabels([f'{i:02}:00' for i in range(25)])
-    plt.ylim([0, 1250])
+    plt.ylim(bottom = 0)
     plt.xlabel('Time [min]')
     plt.ylabel('Power [kW]')
     plt.legend()
@@ -2023,7 +2079,7 @@ def plot_average_energy_vs_time(charging_output_dir):
     plt.xticks(np.arange(0, 1441, 60))
     plt.xticks(rotation=90)
     plt.gca().set_xticklabels([f'{i:02}:00' for i in range(25)])
-    plt.ylim([0, 10500])
+    plt.ylim(bottom = 0)
     plt.xlabel('Time [min]')
     plt.ylabel('Cumulative Daily Energy [kWh]')
     plt.legend()
@@ -2225,7 +2281,7 @@ def define_charging_origin(Scenario_path):
 
                 output_file_path = Scenario_path+'\\'+'Output'+'\\'+'Charging_Summary'+'\\'+ input_dates_folders[i]
                 output_file = os.path.join(output_file_path,file)
-                charge_input = float(get_charge_input_by_name(name))
+                charge_input = float(get_charge_input_by_name(external_battery_name))
                 cumulative_energy = 0
 
                 with open(output_file, 'w') as f_out:
@@ -2242,7 +2298,7 @@ def define_charging_origin(Scenario_path):
                         battery_charged = 0
                         energy_from_grid_for_vehicle = 0
 
-                        if (current_charge - energy_required) > (battery_capacity*external_battery_discharging_threshold):
+                        if (current_charge - energy_required) > (battery_capacity*(external_battery_discharging_threshold/100)):
                             #After the required energy is withdrawn, there will be more than 20% battery charge left.
                             #Charging can take place
                             battery_discharge = energy_required
@@ -2273,7 +2329,7 @@ def define_charging_origin(Scenario_path):
                             space_available = battery_capacity - get_battery_soc_by_name(external_battery_name)
 
                             battery_soc_in_percentage = (get_battery_soc_by_name(external_battery_name)/battery_capacity)
-                            if battery_soc_in_percentage > external_battery_grid_charging_threshold:
+                            if battery_soc_in_percentage > external_battery_grid_charging_threshold/100:
                                 #No additional space for grid charging, solar filled up the battery
                                 additional_charge_required = 0
                             else:
@@ -2328,7 +2384,7 @@ def define_charging_origin(Scenario_path):
                             additional_charge_required = 0
 
                             #The code below allows the grid to charge the external battery, in addition to charging the vehicle
-                            #if battery_soc_in_percentage > external_battery_grid_charging_threshold:
+                            #if battery_soc_in_percentage > external_battery_grid_charging_threshold/100:
                                 #No additional space for grid charging, solar filled up the battery
                                 #additional_charge_required = 0
                             #else:
@@ -2424,7 +2480,7 @@ def plot_average_power_vs_time_for_battery(charging_output_dir):
     
     plt.xticks(np.arange(0, 1441, 60))
     plt.xticks(rotation=90)
-    plt.ylim([0, 1250])
+    #plt.ylim(bottom = 0, top = 500)
     plt.gca().set_xticklabels([f'{i:02}:00' for i in range(25)])
 
     plt.xlabel('Time [min]')
@@ -2434,9 +2490,11 @@ def plot_average_power_vs_time_for_battery(charging_output_dir):
     # Save the plot as PNG file
     plot_path = os.path.join(charging_output_dir, "Average_Power_versus_Time" + '.png')
     plt.savefig(plot_path)
+    #plt.show()
+    
     
     # Clear the plot for next iteration
-    plt.clf()
+    #plt.clf()
 
 
 
@@ -2495,7 +2553,7 @@ def plot_average_energy_vs_time_for_battery(charging_output_dir):
     plt.xticks(np.arange(0, 1441, 60))
     plt.xticks(rotation=90)
     plt.gca().set_xticklabels([f'{i:02}:00' for i in range(25)])
-    plt.ylim([0, 10500])
+    plt.ylim(bottom = 0)
         
     plt.xlabel('Time [min]')
     plt.ylabel('Cumulative Daily Energy [kWh]')
@@ -2504,9 +2562,10 @@ def plot_average_energy_vs_time_for_battery(charging_output_dir):
     # Save the plot as PNG file
     plot_path = os.path.join(charging_output_dir, "Average_Energy_versus_Time" + '.png')
     plt.savefig(plot_path)
+    #plt.show()
     
     # Clear the plot for next iteration
-    plt.clf()
+    #plt.clf()
 
 
 def delete_weekend_dirs(directory):
@@ -2581,7 +2640,7 @@ def plot_average_soc_for_battery(charging_output_dir):
             for i in range(1440):
                 writer.writerow([i/60, average_power[i]])
 
-    plt.plot([0, 1440], [20, 20], '--', color='black')
+    plt.plot([0, 1440], [external_battery_discharging_threshold, external_battery_discharging_threshold], '--', color='black')
     plt.ylim([0, 100])
     plt.xticks(np.arange(0, 1441, 60))
     plt.xticks(rotation=90)
@@ -2606,6 +2665,7 @@ def run(Scenario_path):
 
     global external_battery
     global delete_folders
+
     offtake_power(Scenario_path)
     folder_path = Scenario_path + '\\' + 'Output' + '\\' + '24h_Extrapolated_Data'
     if delete_folders == True:
